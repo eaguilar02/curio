@@ -35,6 +35,10 @@ const App: React.FC = () => {
   );
 };
 
-const root = ReactDOM.createRoot(document.getElementById("root"));
+import { LoggingProvider } from "./logging/LoggingContext";
 
-root.render(<App />);
+ReactDOM.createRoot(document.getElementById("root")!).render(
+  <LoggingProvider workflowId={null} userId={1}>
+      <App />
+  </LoggingProvider>
+);

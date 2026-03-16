@@ -28,6 +28,7 @@ import { TrillGenerator } from "../TrillGenerator";
 import { applyDashboardLayout } from "../utils/dashboardLayout";
 import { ensureMergeArrays, parseHandleIndex, setMergeSlot, clearMergeSlot } from "../utils/mergeFlowUtils";
 import { useWorkflowOperations } from "../hook/useWorkflowOperations";
+import { EventInterceptor } from "../logging/EventInterceptor";
 
 
 export interface IOutput {
@@ -38,16 +39,13 @@ export interface IOutput {
 export interface IInteraction {
     nodeId: string;
     details: any;
-    priority: number; // used to solve conflicts of interactions 1 has more priority than 0
+    priority: number;
 }
 
-// propagating interactions between pools at different resolutions
 export interface IPropagation {
     nodeId: string;
-    propagation: any; // {[index]: [interaction value]}
+    propagation: any;
 }
-
-// applyNewOutputs = useCallback((newOutNodeId: string, newOutput: string)
 
 interface FlowContextProps {
     nodes: Node[];
@@ -68,7 +66,6 @@ interface FlowContextProps {
     updatePositionDashboard: (nodeId: string, position: any) => void;
     applyNewOutput: (output: IOutput) => void;
 
-    // NEW CODE
     dashboardPins: { [key: string]: boolean };
     workflowNameRef: React.MutableRefObject<string>;
     setWorkflowName: (name: string) => void;
@@ -113,7 +110,6 @@ export const FlowContext = createContext<FlowContextProps>({
     updatePositionDashboard: () => { },
     applyNewOutput: () => { },
 
-    // NEW CODE
     dashboardPins: {},
     workflowNameRef: { current: "" },
     loading: false,
@@ -144,17 +140,18 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
     const [outputs, setOutputs] = useState<IOutput[]>([]);
     const [interactions, setInteractions] = useState<IInteraction[]>([]);
+    const eventInterceptor = EventInterceptor.getInstance();
 
-    const [dashboardPins, setDashboardPins] = useState<any>({}); // {[nodeId] -> boolean}
+    const [dashboardPins, setDashboardPins] = useState<any>({});
 
-    const [positionsInDashboard, _setPositionsInDashboard] = useState<any>({}); // [nodeId] -> change
+    const [positionsInDashboard, _setPositionsInDashboard] = useState<any>({});
     const positionsInDashboardRef = useRef(positionsInDashboard);
     const setPositionsInDashboard = (data: any) => {
         positionsInDashboardRef.current = data;
         _setPositionsInDashboard(data);
     };
 
-    const [positionsInWorkflow, _setPositionsInWorkflow] = useState<any>({}); // [nodeId] -> change
+    const [positionsInWorkflow, _setPositionsInWorkflow] = useState<any>({});
     const positionsInWorkflowRef = useRef(positionsInWorkflow);
     const setPositionsInWorkflow = (data: any) => {
         positionsInWorkflowRef.current = data;
@@ -180,7 +177,7 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
         let empty_trill = TrillGenerator.generateTrill([], [], workflowNameRef.current);
         TrillGenerator.intializeProvenance(empty_trill);
         setLoading(false);
-    }
+    };
 
     useEffect(() => {
         initializeProvenance();
@@ -188,16 +185,7 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
 
     const setDashBoardMode = (value: boolean) => {
         if (value) {
-            // When entering dashboard mode, apply the automatic layout
             setNodes((nds) => {
-                console.log('Current nodes before dashboard layout:', nds.map(n => ({
-                    id: n.id,
-                    type: n.type,
-                    position: n.position,
-                    pinned: dashboardPins[n.id]
-                })));
-
-                // Save current positions as workflow positions if not already set
                 const nodesWithWorkflowPositions = nds.map(node => ({
                     ...node,
                     data: {
@@ -206,22 +194,10 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
                     },
                 }));
 
-                console.log('Applying dashboard layout to nodes:', nodesWithWorkflowPositions.length);
-                console.log('Dashboard pins:', dashboardPins);
-
                 const updatedNodes = applyDashboardLayout(nodesWithWorkflowPositions, edges, dashboardPins);
 
-                console.log('Updated nodes after layout:', updatedNodes.map(n => ({
-                    id: n.id,
-                    type: n.type,
-                    position: n.position,
-                    data: n.data
-                })));
-
-                // Update positions in the dashboard state
                 updatedNodes.forEach((node) => {
                     if (dashboardPins[node.id]) {
-                        console.log(`Updating dashboard position for node ${node.id}:`, node.position);
                         updatePositionDashboard(node.id, node.position);
                     }
                 });
@@ -229,22 +205,18 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
                 return updatedNodes;
             });
         } else {
-            // When exiting dashboard mode, reset to workflow positions
             setNodes((nds) => {
                 const resetNodes = nds.map(node => {
                     const workflowPos = node.data.workflowPosition || node.position;
-                    console.log(`Resetting node ${node.id} to workflow position:`, workflowPos);
                     return {
                         ...node,
                         position: workflowPos,
                         data: {
                             ...node.data,
-                            // Clear temporary dashboard position
                             dashboardPosition: undefined,
                         },
                     };
                 });
-                console.log('Nodes after reset:', resetNodes);
                 return resetNodes;
             });
         }
@@ -270,7 +242,6 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
 
     const addNode = useCallback(
         (node: Node, customWorkflowName?: string, provenance?: boolean) => {
-            console.log("add node");
             setNodes((prev: any) => {
                 updatePositionWorkflow(node.id, {
                     id: node.id,
@@ -282,13 +253,25 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
                 return prev.concat(node);
             });
 
-            if (provenance) // If there should be provenance tracking
+            eventInterceptor.capture({
+                event_type: "NODE_ADDED",
+                node_id: node.id,
+                event_data: {
+                    nodeType: String(node.type ?? ""),
+                    position: {
+                        x: node.position?.x ?? 0,
+                        y: node.position?.y ?? 0,
+                    },
+                    label: node.data?.label,
+                },
+            });
+
+            if (provenance)
                 newBox((customWorkflowName ? customWorkflowName : workflowNameRef.current), (node.type as string) + "-" + node.id);
         },
-        [setNodes]
+        [setNodes, eventInterceptor]
     );
 
-    // updates a single box with the new input (new connections)
     const applyOutput = (
         inBox: BoxType,
         inId: string,
@@ -298,17 +281,13 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
     ) => {
         if (sourceHandle == "in/out" && targetHandle == "in/out") return;
 
-        let getOutput = outId;
-        let setInput = inId;
-
         let output = "";
 
         setOutputs((opts: any) =>
             opts.map((opt: any) => {
-                if (opt.nodeId == getOutput) {
+                if (opt.nodeId == outId) {
                     output = opt.output;
                 }
-
                 return opt;
             })
         );
@@ -334,10 +313,18 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
     const onEdgesDelete = useCallback(
         (connections: Edge[]) => {
             for (const connection of connections) {
+                eventInterceptor.capture({
+                    event_type: "EDGE_REMOVED",
+                    node_id: null,
+                    event_data: {
+                        sourceNodeId: String(connection.source ?? ""),
+                        targetNodeId: String(connection.target ?? ""),
+                    },
+                });
+
                 const resetInput = connection.target;
                 const targetNode = reactFlow.getNode(connection.target) as Node;
 
-                // skiping syncronized connections
                 if (
                     connection.sourceHandle != "in/out" &&
                     connection.targetHandle != "in/out"
@@ -349,7 +336,6 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
                     );
                 }
 
-                // skiping syncronized connections
                 if (
                     connection.sourceHandle != "in/out" ||
                     connection.targetHandle != "in/out"
@@ -373,7 +359,7 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
                 }
             }
         },
-        [setNodes]
+        [setNodes, eventInterceptor]
     );
 
     const onNodesDelete = useCallback(
@@ -383,7 +369,6 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
                     for (const change of changes) {
                         if (change.type === "remove" && 'id' in change) {
                             if (opt.nodeId === change.id) {
-                                // node was removed
                                 return false;
                             }
                         }
@@ -396,29 +381,31 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
                 if (change.type === "remove" && 'id' in change) {
                     const node = reactFlow.getNode(change.id) as Node;
                     if (node) {
+                        eventInterceptor.capture({
+                            event_type: "NODE_REMOVED",
+                            node_id: change.id,
+                            event_data: {
+                                nodeType: String(node.type ?? ""),
+                                label: node.data?.label,
+                            },
+                        });
+
                         deleteBox(workflowNameRef.current, node.type + "_" + node.id);
                     }
                 }
             }
         },
-        [setOutputs, reactFlow, deleteBox]
+        [setOutputs, reactFlow, deleteBox, eventInterceptor]
     );
 
     const onConnect = useCallback(
         (connection: Connection, custom_nodes?: any, custom_edges?: any, custom_workflow?: string, provenance?: boolean) => {
-            console.log(
-                "onConnect triggered:",
-                connection.source,
-                connection.sourceHandle,
-                connection.target,
-                connection.targetHandle
-            );
-
             const nodes = custom_nodes ? custom_nodes : reactFlow.getNodes();
             const edges = custom_edges ? custom_edges : reactFlow.getEdges();
             const target = nodes.find(
                 (node: any) => node.id === connection.target
             ) as Node;
+
             const hasCycle = (node: Node, visited = new Set()) => {
                 if (visited.has(node.id)) return false;
 
@@ -434,10 +421,8 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
                 }
             };
 
-            // accept string, null, or undefined:
             const isInHandle = (h: string | null | undefined): boolean => !!h && h.startsWith("in");
             const isInOutHandle = (h: string | null | undefined): boolean => h === "in/out";
-
 
             let validHandleCombination = true;
 
@@ -463,9 +448,7 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
                 alert("An out connection can only be connected to an in connection");
             }
 
-
             if (validHandleCombination) {
-                // Check compatibility between inputs and outputs
                 let inBox: BoxType | undefined = undefined;
                 let outBox: BoxType | undefined = undefined;
 
@@ -499,7 +482,6 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
                             .map((edge: Edge) => edge.targetHandle)
                     );
 
-
                     if (usedHandles.size > 7) {
                         alert("Connection Limit Reached!\n\nMerge nodes can only accept up to 7 input connections.");
                         allowConnection = false;
@@ -509,8 +491,6 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
                     }
                 }
 
-
-                // Checking cycles
                 if (target.id === connection.source) {
                     alert("Cycles are not allowed");
                     allowConnection = false;
@@ -522,6 +502,17 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
                 }
 
                 if (allowConnection) {
+                    eventInterceptor.capture({
+                        event_type: "EDGE_CREATED",
+                        node_id: null,
+                        event_data: {
+                            sourceNodeId: String(connection.source ?? ""),
+                            targetNodeId: String(connection.target ?? ""),
+                            sourceHandle: connection.sourceHandle ?? null,
+                            targetHandle: connection.targetHandle ?? null,
+                        },
+                    });
+
                     applyOutput(
                         inBox as BoxType,
                         connection.target as string,
@@ -550,7 +541,7 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
                         } else {
                             customConnection.type = EdgeType.UNIDIRECTIONAL_EDGE;
 
-                            if (true)  //Changed provenance to always persist connections; monitor for potential side effects.
+                            if (true)
                                 newConnection(
                                     (custom_workflow ? custom_workflow : workflowNameRef.current),
                                     customConnection.source,
@@ -565,10 +556,9 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
                 }
             }
         },
-        [setEdges]
+        [setEdges, reactFlow, eventInterceptor, newConnection]
     );
 
-    // Checking for cycles and invalid connections between types of boxes
     const isValidConnection = useCallback(
         (connection: Connection) => {
             return true;
@@ -576,11 +566,9 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
         [reactFlow.getNodes, reactFlow.getEdges]
     );
 
-    // a box generated a new output. Propagate it to directly connected boxes
     const applyNewOutput = (newOutput: IOutput) => {
         const currentEdges = reactFlow.getEdges();
 
-        // Find which nodes are directly downstream of the output source
         const nodesAffected: string[] = [];
         for (const edge of currentEdges) {
             if (edge.sourceHandle == "in/out" && edge.targetHandle == "in/out") continue;
@@ -623,13 +611,12 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
         });
     };
 
-    // responsible for flow of already connected nodes
     const applyNewInteractions = useCallback(() => {
         let newInteractions = interactions.filter((interaction) => {
             return interaction.priority == 1;
-        }); //priority == 1 means that this is a new or updated interaction
+        });
 
-        let toSend: any = {}; // {nodeId -> {type: VisInteractionType, data: any}}
+        let toSend: any = {};
         let interactedIds: string[] = newInteractions.map(
             (interaction: IInteraction) => {
                 return interaction.nodeId;
@@ -668,8 +655,6 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
                     interactedIds.includes(edges[i].source) &&
                     poolsIds.includes(edges[i].target)
                 ) {
-                    // then the target is the pool
-
                     if (toSend[edges[i].target] == undefined) {
                         toSend[edges[i].target] = [
                             interactionDict[edges[i].source],
@@ -683,7 +668,6 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
                     interactedIds.includes(edges[i].target) &&
                     poolsIds.includes(edges[i].source)
                 ) {
-                    // then the source is the pool
                     if (toSend[edges[i].source] == undefined) {
                         toSend[edges[i].source] = [
                             interactionDict[edges[i].target],
@@ -707,7 +691,6 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
         );
     }, [interactions]);
 
-    // propagations only happen with in/out
     const applyNewPropagation = useCallback((propagationObj: IPropagation) => {
         let sendTo: string[] = [];
 
@@ -718,7 +701,6 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
                 edge.target == propagationObj.nodeId ||
                 edge.source == propagationObj.nodeId
             ) {
-                // if one of the endpoints of the edge is responsible for the propagation
                 let targetNode = reactFlow.getNode(edge.target) as Node;
                 let sourceNode = reactFlow.getNode(edge.source) as Node;
 
@@ -762,9 +744,7 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
     useEffect(() => {
         applyNewInteractions();
     }, [interactions]);
-    // NEW CODE
 
-    // Workflow operations extracted into a dedicated hook
     const workflowOps = useWorkflowOperations({
         nodes, edges,
         setNodes, setEdges,
@@ -797,14 +777,12 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
                 updatePositionDashboard,
                 applyNewOutput,
 
-                // NEW CODE
                 dashboardPins,
                 workflowNameRef,
                 setWorkflowName,
                 loading,
 
                 ...workflowOps,
-
             }}
         >
             {children}
