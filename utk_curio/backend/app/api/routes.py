@@ -17,6 +17,9 @@ import pandas as pd
 import geopandas as gpd
 from openai import OpenAI
 
+from utk_curio.backend.db_migration import run_migration
+from utk_curio.backend.app.api.logging_routes import register_logging_routes
+
 # The Flask app
 from utk_curio.backend.app.api import bp
 
@@ -95,6 +98,8 @@ def get_db_path():
     launch_dir = os.environ.get("CURIO_LAUNCH_CWD", os.getcwd())
     db_path = os.path.join(launch_dir, ".curio", "provenance.db")
     return db_path
+
+run_migration(get_db_path())
 
 def get_templates_path():
     launch_dir = os.environ.get("CURIO_LAUNCH_CWD", os.getcwd())
@@ -1865,3 +1870,4 @@ def clean_openai_chat():
     conversation[chatId] = []
 
     return jsonify({"message": "Success"}), 200
+register_logging_routes(bp, get_db_path)
