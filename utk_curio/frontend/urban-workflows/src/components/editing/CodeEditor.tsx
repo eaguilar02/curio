@@ -10,6 +10,7 @@ import Editor from "@monaco-editor/react";
 import { useFlowContext } from "../../providers/FlowProvider";
 import { useProvenanceContext } from "../../providers/ProvenanceProvider";
 import { ICodeData } from "../../types";
+import { EventInterceptor } from "../../logging/EventInterceptor";
 
 type CodeEditorProps = {
     setOutputCallback: any;
@@ -43,6 +44,7 @@ function CodeEditor({
 
     const replacedCodeDirtyBypass = useRef(false);
     const defaultValueBypass = useRef(false);
+    const executionStartRef = useRef<number | null>(null);
 
     // @ts-ignore
     const handleCodeChange = (value, event) => {
@@ -63,19 +65,26 @@ function CodeEditor({
     }, [code]);
 
     const processExecutionResult = (result: any) => {
+        const durationMs =
+            executionStartRef.current != null
+                ? Date.now() - executionStartRef.current
+                : undefined;
+
+        EventInterceptor.getInstance().capture({
+            event_type: "EXECUTION_COMPLETED",
+            node_id: data.nodeId,
+            event_data: {
+                success: result.stderr == "",
+                durationMs,
+                error: result.stderr ? result.stderr : undefined,
+            },
+        });
+
         let outputContent = "";
-        outputContent += "stdout:\n"+result.stdout.slice(0, 100);
-        outputContent += "\nstderr:\n"+result.stderr;
+        outputContent += "stdout:\n" + result.stdout.slice(0, 100);
+        outputContent += "\nstderr:\n" + result.stderr;
 
-        // outputContent += "\nnode output:\n";
-        // if (outputContent.length > 100) {
-        //     outputContent += result.codeOut.slice(0, 100) + "...";
-        // }
-        // else {
-        //     outputContent += result.codeOut;
-        // }
-
-        outputContent += "\nSaved to file: "+result.output.path;
+        outputContent += "\nSaved to file: " + result.output.path;
 
         setOutputCallback({ code: "success", content: outputContent });
 
@@ -94,8 +103,16 @@ function CodeEditor({
             replacedCodeDirtyBypass.current &&
             output.code == "exec"
         ) {
-            // the code was executing and not only resolving widgets
-            // console.log(data);
+            executionStartRef.current = Date.now();
+
+            EventInterceptor.getInstance().capture({
+                event_type: "NODE_EXECUTED",
+                node_id: data.nodeId,
+                event_data: {
+                    triggerSource: "prop_change",
+                },
+            });
+
             data.pythonInterpreter.interpretCode(
                 code,
                 replacedCode,

@@ -6,6 +6,7 @@ import { WidgetType, BoxType } from "../../constants";
 import { PythonInterpreter } from "../../PythonInterpreter";
 import { useFlowContext } from "../../providers/FlowProvider";
 import { useProvenanceContext } from "../../providers/ProvenanceProvider";
+import { EventInterceptor } from "../../logging/EventInterceptor";
 
 import "./WidgetsEditor.css";
 
@@ -48,33 +49,33 @@ function WidgetsEditor({
 
     // File upload handling functions
     const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-        setSelectedFile(file);
-        const lower = file.name.toLowerCase();
-        const kind: "csv" | "tsv" | "geojson" =
-            lower.endsWith(".csv") ? "csv" :
-            lower.endsWith(".tsv") ? "tsv" :
-            "geojson";
-        setFileKind(kind);
+        const file = event.target.files?.[0];
+        if (file) {
+            setSelectedFile(file);
+            const lower = file.name.toLowerCase();
+            const kind: "csv" | "tsv" | "geojson" =
+                lower.endsWith(".csv") ? "csv" :
+                lower.endsWith(".tsv") ? "tsv" :
+                "geojson";
+            setFileKind(kind);
 
-        setFileInfo({
-            name: file.name,
-            size: (file.size / 1024).toFixed(2) + " KB",
-            type: file.type || (kind === "csv" ? "text/csv" : kind === "tsv" ? "text/tab-separated-values" : "application/geo+json"),
-            lastModified: new Date(file.lastModified).toLocaleString(),
-        });
+            setFileInfo({
+                name: file.name,
+                size: (file.size / 1024).toFixed(2) + " KB",
+                type: file.type || (kind === "csv" ? "text/csv" : kind === "tsv" ? "text/tab-separated-values" : "application/geo+json"),
+                lastModified: new Date(file.lastModified).toLocaleString(),
+            });
 
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const content = e.target?.result as string;
-            setCsvContent(content);
-        };
-        reader.readAsText(file);
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const content = e.target?.result as string;
+                setCsvContent(content);
+            };
+            reader.readAsText(file);
 
-        setUploadResult(null);
-    }
-};
+            setUploadResult(null);
+        }
+    };
 
     const handleRunCode = async () => {
         if (!selectedFile || !csvContent) {
@@ -95,8 +96,8 @@ function WidgetsEditor({
 
             let pythonCode = "";
 
-if (fileKind === "csv") {
-    pythonCode = `import pandas as pd
+            if (fileKind === "csv") {
+                pythonCode = `import pandas as pd
 from io import StringIO
 
 csv_content = '''${escaped}'''
@@ -106,8 +107,8 @@ print(f"Columns: {list(df.columns)}")
 print("First 5 rows:")
 print(df.head())
 return df`;
-} else if (fileKind === "tsv") {
-    pythonCode = `import pandas as pd
+            } else if (fileKind === "tsv") {
+                pythonCode = `import pandas as pd
 from io import StringIO
 
 tsv_content = '''${escaped}'''
@@ -117,9 +118,9 @@ print(f"Columns: {list(df.columns)}")
 print("First 5 rows:")
 print(df.head())
 return df`;
-} else {
-    // geojson/json
-    pythonCode = `import json
+            } else {
+                // geojson/json
+                pythonCode = `import json
 import pandas as pd
 
 geojson_text = '''${escaped}'''
@@ -143,7 +144,7 @@ except Exception as e:
     print("First 5 rows:")
     print(df.head())
     return df`;
-}
+            }
 
             data.pythonInterpreter.interpretCode(
                 pythonCode,
@@ -204,15 +205,14 @@ except Exception as e:
         } else if (widget == WidgetType.INPUT_VALUE) {
             valid = isANumber(value);
         } else if (widget == WidgetType.INPUT_TEXT) {
-            // anything can be used as text
             valid = true;
-            convertedValue = '"' + value.replaceAll('"', "") + '"'; // surrounding the value in quotes to be understood as a string
+            convertedValue = '"' + value.replaceAll('"', "") + '"';
         } else if (
             widget == WidgetType.INPUT_LIST_VALUE ||
             widget == WidgetType.INPUT_LIST_TEXT
         ) {
             try {
-                JSON.parse(value); // checking if it is a valid array
+                JSON.parse(value);
                 valid = true;
             } catch (error) {
                 console.log("error", error);
@@ -220,7 +220,7 @@ except Exception as e:
             }
         } else if (widget == WidgetType.RANGE) {
             try {
-                let list = JSON.parse(value); // checking if it is a valid array
+                let list = JSON.parse(value);
 
                 if (
                     list.length == 2 &&
@@ -233,13 +233,11 @@ except Exception as e:
                 valid = false;
             }
         } else if (widget == WidgetType.SELECTION) {
-            // anything can be used as text
             valid = true;
-            convertedValue = '"' + value.replaceAll('"', "") + '"'; // surrounding the value in quotes to be understood as a string
+            convertedValue = '"' + value.replaceAll('"', "") + '"';
         } else if (widget == WidgetType.FILE) {
-            // anything can be used as text
             valid = true;
-            convertedValue = '\'\'\'' + value + '\'\'\''; // surrounding the value in quotes to be understood as a string
+            convertedValue = '\'\'\'' + value + '\'\'\'';
         }
 
         if (valid) {
@@ -249,7 +247,6 @@ except Exception as e:
         }
     };
 
-    // look for markers in this format [!! variable$widget$default !!]
     const resolveMarks = (userCode: string, currentWidgetsValues: any) => {
         const computeMark = (content: string, prevWidgetsValues: any) => {
             let config = content.split("$");
@@ -273,8 +270,6 @@ except Exception as e:
                 prevWidgetsValues[config[0]] != undefined &&
                 prevWidgetsValues[config[0]].widget == config[1]
             ) {
-                // this is not a new marker, carry the previous value of the widget
-
                 if (args != undefined)
                     return {
                         [config[0]]: {
@@ -292,7 +287,7 @@ except Exception as e:
                         },
                     };
             } else {
-                let resolvedMark = validateWidgetValue(config[1], config[2]); // validate what comes from default values in the marks
+                let resolvedMark = validateWidgetValue(config[1], config[2]);
 
                 if (Object.keys(resolvedMark).length == 0) {
                     alert(
@@ -322,12 +317,9 @@ except Exception as e:
             }
         };
 
-        // Regular expression to match the content inside [!! !!] markers globally
-        // @ts-ignore
         const regex = /\[\!\!\s*(.*?)\s*\!\!\]/g;
 
         let widgetsValues: any = {};
-
         let errorReplacing = false;
 
         const replacedCode = userCode.replace(regex, (match, content) => {
@@ -359,7 +351,6 @@ except Exception as e:
     };
 
     const updateCurrentWidgets = () => {
-        // Update currentWidgets (the user pressed exec)
         let div = document.getElementById(
             "widgetsEditor" + nodeId
         ) as HTMLElement;
@@ -368,10 +359,8 @@ except Exception as e:
         let selects = div.querySelectorAll("select");
 
         let newCurrentWidgetsValues: any = {};
+        let validation = true;
 
-        let validation = true; // flag to indicate if the input from the user was validated sucessfully
-
-        // computing user input
         setNonValidatedValues((prev: any) => {
             let variables = Object.keys(prev);
 
@@ -389,7 +378,6 @@ except Exception as e:
                         );
 
                         if (Object.keys(validatedValue).length != 0) {
-                            // correctly validated
                             newCurrentWidgetsValues[elem] = {
                                 widget: widget,
                                 value: validatedValue.value,
@@ -415,7 +403,6 @@ except Exception as e:
                         );
 
                         if (Object.keys(validatedValue).length != 0) {
-                            // correctly validated
                             newCurrentWidgetsValues[elem] = {
                                 widget: widget,
                                 value: validatedValue.value,
@@ -429,13 +416,10 @@ except Exception as e:
                 });
             }
 
-            // setCurrentWidgetsValues({...newCurrentWidgetsValues});
-
             return prev;
         });
 
         if (validation) {
-            // computing marks and considering defaults
             let newWidgetsValues = resolveMarks(
                 userCode,
                 newCurrentWidgetsValues
@@ -473,9 +457,29 @@ except Exception as e:
 
         let newNonValidatedValues: any = {};
 
+        const oldValue =
+            variable in nonValidatedValues ? nonValidatedValues[variable].value : null;
+
+        const newValue =
+            widget === WidgetType.CHECKBOX
+                ? (oldValue === "True" ? "False" : "True")
+                : widget === WidgetType.FILE
+                ? event.target?.files?.[0]?.name ?? ""
+                : event.target.value;
+
+        EventInterceptor.getInstance().capture({
+            event_type: "PARAM_CHANGED",
+            node_id: nodeId,
+            event_data: {
+                paramName: variable,
+                oldValue,
+                newValue,
+                widgetType: widget,
+            },
+        });
+
         for (const elem of variables) {
             if (elem == variable) {
-                // updating the value of the interacted variable
                 if (widget == WidgetType.CHECKBOX) {
                     if (nonValidatedValues[variable].value == "True")
                         newNonValidatedValues[variable] = {
@@ -490,7 +494,6 @@ except Exception as e:
                             args: nonValidatedValues[elem].args,
                         };
                 } else if (widget == WidgetType.FILE) {
-
                     let file = event.target.files[0];
                     let reader = new FileReader();
 
@@ -502,7 +505,8 @@ except Exception as e:
                             value: reader.result,
                             args: nonValidatedValues[elem].args,
                         };
-                    }
+                        setNonValidatedValues({ ...newNonValidatedValues });
+                    };
 
                     reader.onerror = () => {
                         alert("Error reading file.");
@@ -511,10 +515,10 @@ except Exception as e:
                             value: "",
                             args: nonValidatedValues[elem].args,
                         };
-                    }
+                        setNonValidatedValues({ ...newNonValidatedValues });
+                    };
 
                     reader.readAsText(file);
-
                 } else {
                     newNonValidatedValues[elem] = {
                         widget: widget,
@@ -531,7 +535,9 @@ except Exception as e:
             }
         }
 
-        setNonValidatedValues(newNonValidatedValues);
+        if (widget != WidgetType.FILE) {
+            setNonValidatedValues(newNonValidatedValues);
+        }
     };
 
     const getHTMLWidget = (
@@ -699,9 +705,6 @@ except Exception as e:
         }
     };
 
-    // when user interacts with widgets currentWidgetsValues must be updated. Make sure to convert the input to the right type
-    // validate input on the widgets every time the focus is out
-
     return (
         <div
             id={"widgetsEditor" + nodeId}
@@ -754,89 +757,9 @@ except Exception as e:
                         );
                     }
                 )
-            ) : null }
-            
+            ) : null}
         </div>
     );
 }
 
 export default WidgetsEditor;
-
-            // customWidgetsCallback == undefined && data && data.boxType === BoxType.DATA_LOADING ? (
-            //     <div className="csv-upload-widget">
-            //         <div className="upload-section">
-            //             <div className="file-input-container">
-            //                 <input
-            //                     type="file"
-            //                     accept=".txt, .csv, .json, .geojson, .tsv"
-            //                     onChange={handleFileSelect}
-            //                     style={{ display: "none" }}
-            //                     id={`file-input-${nodeId}`}
-            //                 />
-            //                 <button
-            //                     className="btn btn-outline-secondary"
-            //                     onClick={() =>
-            //                         document
-            //                             .getElementById(`file-input-${nodeId}`)
-            //                             ?.click()
-            //                     }
-            //                     style={{ marginRight: "10px" }}
-            //                     disabled={disableWidgets}
-            //                 >
-            //                     📁 Upload File
-            //                 </button>
-            //                 <button
-            //                     className="btn btn-success"
-            //                     onClick={handleRunCode}
-            //                     disabled={!selectedFile || isProcessing || disableWidgets}
-            //                 >
-            //                     {isProcessing
-            //                         ? "⏳ Processing..."
-            //                         : "▶️ Load Data"}
-            //                 </button>
-            //             </div>
-
-            //             {uploadResult && (
-            //                 <div
-            //                     className={`upload-result ${uploadResult.success ? "success" : "error"}`}
-            //                 >
-            //                     <div>{uploadResult.message}</div>
-            //                     {uploadResult.success &&
-            //                         uploadResult.savedPath && (
-            //                             <div className="output-path">
-            //                                 <strong>
-            //                                     📊 Dataframe saved to:
-            //                                 </strong>{" "}
-            //                                 <code>
-            //                                     {uploadResult.savedPath}
-            //                                 </code>
-            //                             </div>
-            //                         )}
-            //                 </div>
-            //             )}
-            //         </div>
-
-            //         {fileInfo && (
-            //             <div className="file-info-section">
-            //                 <div className="file-info-header">
-            //                     📁 File Information:
-            //                 </div>
-            //                 <div className="file-info-details">
-            //                     <div>
-            //                         <strong>Name:</strong> {fileInfo.name}
-            //                     </div>
-            //                     <div>
-            //                         <strong>Size:</strong> {fileInfo.size}
-            //                     </div>
-            //                     <div>
-            //                         <strong>Type:</strong> {fileInfo.type}
-            //                     </div>
-            //                     <div>
-            //                         <strong>Last Modified:</strong>{" "}
-            //                         {fileInfo.lastModified}
-            //                     </div>
-            //                 </div>
-            //             </div>
-            //         )}
-            //     </div>
-            // ) : null}
