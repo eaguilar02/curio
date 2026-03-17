@@ -47,6 +47,7 @@ inputTypesSupported = {
     "CONSTANTS": [],
     "DATA_POOL": ["DATAFRAME", "GEODATAFRAME"],
     "MERGE_FLOW": ["DATAFRAME", "GEODATAFRAME", "VALUE", "LIST", "JSON"],
+    "TIME_MACHINE": []
 }
 
 outputTypesSupported = {
@@ -64,6 +65,7 @@ outputTypesSupported = {
     "CONSTANTS": ["VALUE"],
     "DATA_POOL": ["DATAFRAME", "GEODATAFRAME"],
     "MERGE_FLOW": ["DATAFRAME", "GEODATAFRAME", "VALUE", "LIST", "JSON"],
+    "TIME_MACHINE": []
 }
 
 attributeIds = {

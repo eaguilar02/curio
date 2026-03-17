@@ -107,7 +107,7 @@ describe('Registered descriptors', () => {
   });
 
   test('handles contain at least one entry for non-special box types', () => {
-    const excluded = new Set([BoxType.MERGE_FLOW, BoxType.COMMENTS]);
+    const excluded = new Set([BoxType.MERGE_FLOW, BoxType.COMMENTS, BoxType.TIME_MACHINE]);
     const descriptors = getAllNodeTypes().filter((d) => !excluded.has(d.id));
     for (const desc of descriptors) {
       expect(desc.adapter.handles.length).toBeGreaterThan(0);
