@@ -7,7 +7,6 @@ const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:5002';
 interface InteractionEvent {
 
   event_id: number;
-  session_id: number;
   event_type: string;
   node_id: string;
   event_time: string;
@@ -57,25 +56,30 @@ export const useTimeMachineLifecycle: BoxLifecycleHook = (_data, _boxState) => {
       {!loading && !error && (
         <>
           <div style={headerStyle}>
+            <span style={{ minWidth: '40px' }}>ID</span>
             <span style={{ minWidth: '140px' }}>Timestamp</span>
-            <span style={{ minWidth: '80px' }}>Session</span>
             <span style={{ minWidth: '120px' }}>Event Type</span>
             <span style={{ minWidth: '120px' }}>Node Type</span>
-            <span>Node ID</span>
+            <span style={{ minWidth: '120px' }}>Event Data</span>
+            <span style={{ minWidth: '120px' }}>Node ID</span>
           </div>
           {events.length === 0 && <p style={{ marginTop: '8px' }}>No events recorded yet.</p>}
           {events.map((evt) => {
             let nodeType = '';
+            let truncatedData = '—';
             try {
               const data = typeof evt.event_data === 'string' ? JSON.parse(evt.event_data) : evt.event_data;
               nodeType = (data as Record<string, unknown>)?.nodeType as string ?? '';
+              const rawData = typeof evt.event_data === 'string' ? evt.event_data : JSON.stringify(evt.event_data);
+              truncatedData = rawData?.length > 60 ? rawData.slice(0, 60) + '...' : rawData;
             } catch {}
             return (
               <div key={evt.event_id} style={{ borderBottom: '1px solid #eee', padding: '4px 0', display: 'flex', gap: '8px' }}>
+                <span style={{ minWidth: '40px', color: '#888' }}>{evt.event_id}</span>
                 <span style={{ color: '#888', minWidth: '140px' }}>{evt.event_time}</span>
-                <span style={{ minWidth: '80px', color: '#666' }}>{evt.session_id ?? '—'}</span>
                 <strong style={{ minWidth: '120px' }}>{evt.event_type}</strong>
                 <span style={{ minWidth: '120px', color: '#666' }}>{nodeType}</span>
+                <span style={{ minWidth: '120px', color: '#333' }}>{truncatedData}</span>
                 {evt.node_id && <span style={{ color: '#aaa' }}>{evt.node_id}</span>}
               </div>
             );
