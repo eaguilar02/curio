@@ -1,8 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-
 import './registry';
-
 import FlowProvider from "./providers/FlowProvider";
 import TemplateProvider from "./providers/TemplateProvider";
 import UserProvider from "./providers/UserProvider";
@@ -12,33 +10,47 @@ import { MainCanvas } from "./components/MainCanvas";
 import { ReactFlowProvider } from "reactflow";
 import ProvenanceProvider from "./providers/ProvenanceProvider";
 import LLMProvider from "./providers/LLMProvider";
+import { LoggingProvider } from "./logging/LoggingContext";
+import { useFlowContext } from "./providers/FlowProvider";
+
+const LoggingProviderWithGraph: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { getGraphState } = useFlowContext();
+
+  return (
+    <LoggingProvider
+      workflowId={null}
+      userId={1}
+      getGraphState={getGraphState}
+    >
+      {children}
+    </LoggingProvider>
+  );
+};
 
 const App: React.FC = () => {
   return (
     <BackendHealthBanner>
-    <ReactFlowProvider>
-      <LLMProvider>
-        <ProvenanceProvider>
-          <UserProvider>
-            <DialogProvider>
-              <FlowProvider>
-                <TemplateProvider>
-                  <MainCanvas />
-                </TemplateProvider>
-              </FlowProvider>
-            </DialogProvider>
-          </UserProvider>
-        </ProvenanceProvider>
-      </LLMProvider>
-    </ReactFlowProvider>
+      <ReactFlowProvider>
+        <LLMProvider>
+          <ProvenanceProvider>
+            <UserProvider>
+              <DialogProvider>
+                <FlowProvider>
+                  <TemplateProvider>
+                    <LoggingProviderWithGraph>
+                      <MainCanvas />
+                    </LoggingProviderWithGraph>
+                  </TemplateProvider>
+                </FlowProvider>
+              </DialogProvider>
+            </UserProvider>
+          </ProvenanceProvider>
+        </LLMProvider>
+      </ReactFlowProvider>
     </BackendHealthBanner>
   );
 };
 
-import { LoggingProvider } from "./logging/LoggingContext";
-
 ReactDOM.createRoot(document.getElementById("root")!).render(
-  <LoggingProvider workflowId={null} userId={1}>
-      <App />
-  </LoggingProvider>
+  <App />
 );

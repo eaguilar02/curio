@@ -89,6 +89,8 @@ interface FlowContextProps {
     eraseWorkflowSuggestions: () => void;
     acceptSuggestion: (nodeId: string) => void;
     updateKeywords: (trill: any) => void;
+
+    getGraphState: () => { nodes: Node[]; edges: Edge[] };
 }
 
 export const FlowContext = createContext<FlowContextProps>({
@@ -132,7 +134,9 @@ export const FlowContext = createContext<FlowContextProps>({
     updateWarnings: () => {},
     cleanCanvas: () => {},
     acceptSuggestion: () => {},
-    loadParsedTrill: async () => { }
+    loadParsedTrill: async () => { },
+
+    getGraphState: () => ({ nodes: [], edges: [] }),
 });
 
 const FlowProvider = ({ children }: { children: ReactNode }) => {
@@ -170,6 +174,11 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
         workflowNameRef.current = data;
         _setWorkflowName(data);
     };
+
+    const getGraphState = useCallback(() => ({
+        nodes: reactFlow.getNodes(),
+        edges: reactFlow.getEdges(),
+    }), [reactFlow]);
 
     const initializeProvenance = async () => {
         setLoading(true);
@@ -781,6 +790,8 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
                 workflowNameRef,
                 setWorkflowName,
                 loading,
+
+                getGraphState,
 
                 ...workflowOps,
             }}

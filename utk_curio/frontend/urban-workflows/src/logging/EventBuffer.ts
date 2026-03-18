@@ -1,9 +1,12 @@
 import { LogEvent, LogEventsBatchRequest } from './types';
+import { SnapshotManager } from './SnapshotManager';
 
 const DEBOUNCED_EVENT_TYPES = new Set<string>(['NODE_MOVED', 'PARAM_CHANGED']);
-const MAX_BATCH_SIZE = 30;
+
+const MAX_BATCH_SIZE    = 30;
 const FLUSH_INTERVAL_MS = 2000;
-const DEBOUNCE_MS = 500;
+const DEBOUNCE_MS       = 500;
+
 const LOG_EVENTS_URL = 'http://localhost:5002/api/log/events';
 
 export class EventBuffer {
@@ -39,7 +42,6 @@ export class EventBuffer {
 
   private debounce(event: LogEvent): void {
     const key = `${event.event_type}|${event.node_id ?? '_'}`;
-
     const existing = this.debounceTimers.get(key);
     if (existing) clearTimeout(existing);
 
@@ -77,15 +79,18 @@ export class EventBuffer {
 
     const batch = this.queue.splice(0, this.queue.length);
 
-    const body: LogEventsBatchRequest = {
+    const snapshotRef = SnapshotManager.getInstance().consumeLatestSnapshotId();
+
+    const body: LogEventsBatchRequest & { snapshot_ref?: number } = {
       session_id: sessionId,
-      events: batch,
+      events:     batch,
+      ...(snapshotRef !== null && { snapshot_ref: snapshotRef }),
     };
 
     fetch(LOG_EVENTS_URL, {
-      method: 'POST',
+      method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body:    JSON.stringify(body),
     })
       .then(res => {
         if (!res.ok) {
@@ -93,17 +98,43 @@ export class EventBuffer {
             `[EventBuffer] POST /api/log/events returned ${res.status}`,
             batch
           );
-        } else {
-          return res.json().then(data => {
-            console.debug(
-              `[EventBuffer] flushed ${data.inserted ?? batch.length} events (session ${sessionId})`
-            );
-          });
+          return;
         }
+        return res.json().then(data => {
+          const inserted = data.inserted ?? batch.length;
+          console.debug(
+            `[EventBuffer] flushed ${inserted} events (session ${sessionId})`
+          );
+          SnapshotManager.getInstance().onEventsFlushed(inserted);
+        });
       })
       .catch(err => {
         console.error('[EventBuffer] network error — events dropped:', err, batch);
       });
+  }
+
+  public flushSync(): void {
+    if (this.queue.length === 0) return;
+
+    const sessionId = this.getSessionId();
+    if (sessionId === null) return;
+
+    const batch = this.queue.splice(0, this.queue.length);
+    const body: LogEventsBatchRequest = {
+      session_id: sessionId,
+      events:     batch,
+    };
+
+    if (navigator.sendBeacon) {
+      const blob = new Blob([JSON.stringify(body)], { type: 'application/json' });
+      navigator.sendBeacon(LOG_EVENTS_URL, blob);
+      console.debug(`[EventBuffer] flushSync: ${batch.length} events via sendBeacon`);
+    } else {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', LOG_EVENTS_URL, false);
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.send(JSON.stringify(body));
+    }
   }
 
   public destroy(): void {

@@ -18,7 +18,7 @@ import geopandas as gpd
 from openai import OpenAI
 
 from utk_curio.backend.db_migration import run_migration
-from utk_curio.backend.app.api.logging_routes import register_logging_routes
+from utk_curio.backend.app.api.logging_routes import register_logging_routes, close_stale_sessions
 
 # The Flask app
 from utk_curio.backend.app.api import bp
@@ -1873,3 +1873,4 @@ def clean_openai_chat():
 
     return jsonify({"message": "Success"}), 200
 register_logging_routes(bp, get_db_path)
+close_stale_sessions(get_db_path())

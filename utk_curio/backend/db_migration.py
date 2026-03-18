@@ -19,15 +19,15 @@ def run_migration(db_path: str) -> None:
 
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS interaction_event (
-        event_id INTEGER PRIMARY KEY,
-        session_id INTEGER,
-        event_type TEXT,
-        node_id TEXT,
-        edge_id TEXT,
-        event_time DATETIME,
-        event_data TEXT,
-        FOREIGN KEY (session_id) REFERENCES interaction_session(session_id)
-    );
+    event_id     INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id   INTEGER,
+    event_type   TEXT,
+    node_id      TEXT,
+    edge_id      TEXT,
+    event_time   TEXT,
+    event_data   TEXT,
+    snapshot_ref INTEGER
+);
     """)
 
     cursor.execute("""

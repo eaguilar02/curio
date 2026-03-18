@@ -1,47 +1,24 @@
-import React, { useState } from "react";
-import CSS from "csstype";
-import { GraphCanvas } from 'reagraph';
-import { TrillGenerator } from "../../../TrillGenerator";
-import { useCode } from "../../../hook/useCode";
-import styles from "./TrillProvenanceWindow.module.css"
+/**
+ * TrillProvenanceWindow.tsx — stub (reagraph removed)
+ */
+import React from 'react';
 
-export default function TrillProvenanceWindow({
-    open,
-    closeModal,
-    workflowName
-} : {
-    open: boolean;
-    closeModal: any;
-    workflowName: string
-}) {
-   
-    const { loadTrill } = useCode();
+const TrillProvenanceWindow: React.FC = () => {
+  return (
+    <div style={{
+      padding: '16px',
+      color: '#64748b',
+      fontSize: '13px',
+      background: '#f8fafc',
+      border: '1px solid #e2e8f0',
+      borderRadius: '6px'
+    }}>
+      <strong>Provenance Window</strong>
+      <p style={{ marginTop: '8px' }}>
+        Disabled due to reagraph crash.
+      </p>
+    </div>
+  );
+};
 
-    const onNodeClick = (nodeData: any) => {
-        TrillGenerator.switchProvenanceTrill(nodeData.id, loadTrill);
-    }
-
-    return (
-        <>
-            {open ? 
-                <div>
-                    <div className={styles.modalBackground}></div>
-                    <div className={styles.modal}>
-                        <span className={styles.closeX} onClick={closeModal}>X</span>
-                        <p className={styles.title}>Provenance for {workflowName}</p>
-                        <div className={styles.graphDiv}>
-                            <GraphCanvas
-                                nodes={TrillGenerator.provenanceJSON.nodes}
-                                edges={TrillGenerator.provenanceJSON.edges}
-                                onNodeClick={onNodeClick}
-                                labelType={"all"}
-                                layoutType={"treeTd2d"}
-                            />
-                        </div>
-                    </div>
-                </div> : null
-            }
-        </>
-
-    );
-}
+export default TrillProvenanceWindow;

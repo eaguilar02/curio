@@ -12,19 +12,17 @@ def register_logging_routes(bp, get_db_path):
     def start_logging_session():
         body = request.get_json(silent=True) or {}
 
-        user_id = body.get("user_id", 1)
+        user_id     = body.get("user_id", 1)
         workflow_id = body.get("workflow_id")
         session_start = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
 
         db_path = get_db_path()
         try:
             conn = sqlite3.connect(db_path)
-            cur = conn.cursor()
+            cur  = conn.cursor()
             cur.execute(
-                """
-                INSERT INTO interaction_session (user_id, workflow_id, session_start)
-                VALUES (?, ?, ?)
-                """,
+                """INSERT INTO interaction_session (user_id, workflow_id, session_start)
+                   VALUES (?, ?, ?)""",
                 (user_id, workflow_id, session_start),
             )
             session_id = cur.lastrowid
@@ -34,14 +32,14 @@ def register_logging_routes(bp, get_db_path):
             logger.error("start_logging_session DB error: %s", e)
             return jsonify({"error": "Database error", "detail": str(e)}), 500
 
-        return jsonify(
-            {
-                "session_id": session_id,
-                "user_id": user_id,
-                "workflow_id": workflow_id,
-                "session_start": session_start,
-            }
-        ), 200
+        logger.debug("start_logging_session: created session_id=%s", session_id)
+        return jsonify({
+            "session_id":    session_id,
+            "user_id":       user_id,
+            "workflow_id":   workflow_id,
+            "session_start": session_start,
+        }), 200
+
 
     @bp.route("/api/log/events", methods=["POST"])
     def log_events():
@@ -51,7 +49,9 @@ def register_logging_routes(bp, get_db_path):
             return jsonify({"error": "Request body must be JSON"}), 400
 
         session_id = body.get("session_id")
-        events = body.get("events", [])
+        events     = body.get("events", [])
+
+        snapshot_ref = body.get("snapshot_ref")
 
         if session_id is None:
             return jsonify({"error": "Missing session_id"}), 400
@@ -66,15 +66,24 @@ def register_logging_routes(bp, get_db_path):
             if not event_type:
                 continue
 
-            node_id = ev.get("node_id")
-            edge_id = ev.get("edge_id")
-            event_time = ev.get("event_time") or datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+            node_id    = ev.get("node_id")
+            edge_id    = ev.get("edge_id")
+            event_time = ev.get("event_time") or \
+                         datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
             event_data = ev.get("event_data")
 
             if isinstance(event_data, dict):
                 event_data = json.dumps(event_data)
 
-            rows.append((session_id, event_type, node_id, edge_id, event_time, event_data))
+            rows.append((
+                session_id,
+                event_type,
+                node_id,
+                edge_id,
+                event_time,
+                event_data,
+                snapshot_ref,
+            ))
 
         if not rows:
             return jsonify({"inserted": 0}), 200
@@ -83,11 +92,10 @@ def register_logging_routes(bp, get_db_path):
         try:
             conn = sqlite3.connect(db_path)
             conn.executemany(
-                """
-                INSERT INTO interaction_event
-                (session_id, event_type, node_id, edge_id, event_time, event_data)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
+                """INSERT INTO interaction_event
+                   (session_id, event_type, node_id, edge_id,
+                    event_time, event_data, snapshot_ref)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
                 rows,
             )
             conn.commit()
@@ -96,22 +104,25 @@ def register_logging_routes(bp, get_db_path):
             logger.error("log_events DB error: %s", e)
             return jsonify({"error": "Database error", "detail": str(e)}), 500
 
+        logger.debug(
+            "log_events: inserted %d events for session %s (snapshot_ref=%s)",
+            len(rows), session_id, snapshot_ref
+        )
         return jsonify({"inserted": len(rows)}), 200
+
 
     @bp.route("/api/log/sessions", methods=["GET"])
     def list_sessions():
         workflow_id = request.args.get("workflow_id", type=int)
-        user_id = request.args.get("user_id", type=int)
-        limit = request.args.get("limit", 50, type=int)
-        offset = request.args.get("offset", 0, type=int)
+        user_id     = request.args.get("user_id",     type=int)
+        limit       = request.args.get("limit",  50,  type=int)
+        offset      = request.args.get("offset", 0,   type=int)
 
         where_clauses = []
         params = []
-
         if workflow_id is not None:
             where_clauses.append("s.workflow_id = ?")
             params.append(workflow_id)
-
         if user_id is not None:
             where_clauses.append("s.user_id = ?")
             params.append(user_id)
@@ -124,8 +135,7 @@ def register_logging_routes(bp, get_db_path):
             conn.row_factory = sqlite3.Row
 
             count_row = conn.execute(
-                f"SELECT COUNT(*) FROM interaction_session s {where_sql}",
-                params,
+                f"SELECT COUNT(*) FROM interaction_session s {where_sql}", params
             ).fetchone()
             total = count_row[0] if count_row else 0
 
@@ -147,25 +157,23 @@ def register_logging_routes(bp, get_db_path):
                 """,
                 params + [limit, offset],
             ).fetchall()
-
             conn.close()
         except sqlite3.Error as e:
             logger.error("list_sessions DB error: %s", e)
             return jsonify({"error": "Database error", "detail": str(e)}), 500
 
-        sessions = [dict(row) for row in rows]
-        return jsonify({"sessions": sessions, "total": total}), 200
+        return jsonify({"sessions": [dict(r) for r in rows], "total": total}), 200
+
 
     @bp.route("/api/log/session/<int:session_id>/events", methods=["GET"])
     def get_session_events(session_id):
-        limit = request.args.get("limit", 200, type=int)
-        offset = request.args.get("offset", 0, type=int)
-        event_type = request.args.get("type", None)
+        limit      = request.args.get("limit",  200, type=int)
+        offset     = request.args.get("offset", 0,   type=int)
+        event_type = request.args.get("type",   None)
 
-        type_clause = "AND event_type = ?" if event_type else ""
+        type_clause  = "AND event_type = ?" if event_type else ""
         params_count = [session_id]
         params_fetch = [session_id]
-
         if event_type:
             params_count.append(event_type)
             params_fetch.append(event_type)
@@ -176,22 +184,23 @@ def register_logging_routes(bp, get_db_path):
             conn.row_factory = sqlite3.Row
 
             count_row = conn.execute(
-                f"SELECT COUNT(*) FROM interaction_event WHERE session_id = ? {type_clause}",
+                f"SELECT COUNT(*) FROM interaction_event "
+                f"WHERE session_id = ? {type_clause}",
                 params_count,
             ).fetchone()
             total = count_row[0] if count_row else 0
 
             rows = conn.execute(
                 f"""
-                SELECT event_id, event_type, node_id, edge_id, event_time, event_data
-                FROM interaction_event
-                WHERE session_id = ? {type_clause}
-                ORDER BY event_time ASC, event_id ASC
-                LIMIT ? OFFSET ?
+                SELECT event_id, event_type, node_id, edge_id,
+                       event_time, event_data, snapshot_ref
+                FROM   interaction_event
+                WHERE  session_id = ? {type_clause}
+                ORDER  BY event_time ASC, event_id ASC
+                LIMIT  ? OFFSET ?
                 """,
                 params_fetch + [limit, offset],
             ).fetchall()
-
             conn.close()
         except sqlite3.Error as e:
             logger.error("get_session_events DB error: %s", e)
@@ -207,10 +216,149 @@ def register_logging_routes(bp, get_db_path):
                     pass
             events.append(ev)
 
-        return jsonify(
-            {
-                "session_id": session_id,
-                "total_events": total,
-                "events": events,
-            }
-        ), 200
+        return jsonify({
+            "session_id":   session_id,
+            "total_events": total,
+            "events":       events,
+        }), 200
+
+
+    @bp.route("/api/log/snapshot", methods=["POST"])
+    def save_snapshot():
+        body = request.get_json(silent=True)
+        if not body:
+            return jsonify({"error": "Request body must be JSON"}), 400
+
+        session_id  = body.get("session_id")
+        event_count = body.get("event_count")
+        graph_json  = body.get("graph_json")
+
+        if session_id is None:
+            return jsonify({"error": "Missing session_id"}), 400
+        if event_count is None:
+            return jsonify({"error": "Missing event_count"}), 400
+        if graph_json is None:
+            return jsonify({"error": "Missing graph_json"}), 400
+
+        if isinstance(graph_json, dict):
+            graph_json = json.dumps(graph_json)
+
+        snapshot_time = body.get("snapshot_time") or \
+                        datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+
+        db_path = get_db_path()
+        try:
+            conn   = sqlite3.connect(db_path)
+            cursor = conn.execute(
+                """INSERT INTO graph_snapshot
+                   (session_id, event_count, snapshot_time, graph_json)
+                   VALUES (?, ?, ?, ?)""",
+                (session_id, event_count, snapshot_time, graph_json),
+            )
+            snapshot_id = cursor.lastrowid
+            conn.commit()
+            conn.close()
+        except sqlite3.Error as e:
+            logger.error("save_snapshot DB error: %s", e)
+            return jsonify({"error": "Database error", "detail": str(e)}), 500
+
+        logger.debug(
+            "save_snapshot: snapshot_id=%s session=%s event_count=%s",
+            snapshot_id, session_id, event_count,
+        )
+        return jsonify({"snapshot_id": snapshot_id, "event_count": event_count}), 200
+
+
+    @bp.route("/api/log/session/end", methods=["POST"])
+    def end_session():
+        body        = request.get_json(silent=True) or {}
+        session_id  = body.get("session_id")
+        session_end = body.get("session_end") or \
+                      datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+
+        if session_id is None:
+            return jsonify({"error": "Missing session_id"}), 400
+
+        db_path = get_db_path()
+        try:
+            conn = sqlite3.connect(db_path)
+
+            row = conn.execute(
+                "SELECT session_id FROM interaction_session WHERE session_id = ?",
+                (session_id,),
+            ).fetchone()
+
+            if not row:
+                conn.close()
+                return jsonify({"error": f"Session {session_id} not found"}), 404
+
+            conn.execute(
+                "UPDATE interaction_session SET session_end = ? WHERE session_id = ?",
+                (session_end, session_id),
+            )
+            conn.commit()
+            conn.close()
+        except sqlite3.Error as e:
+            logger.error("end_session DB error: %s", e)
+            return jsonify({"error": "Database error", "detail": str(e)}), 500
+
+        logger.debug("end_session: session_id=%s closed at %s", session_id, session_end)
+        return jsonify({
+            "closed":      True,
+            "session_id":  session_id,
+            "session_end": session_end,
+        }), 200
+
+
+    @bp.route("/api/log/sessions/cleanup", methods=["POST"])
+    def cleanup_stale_sessions():
+        hours = request.args.get("hours", 24, type=int)
+
+        db_path = get_db_path()
+        try:
+            conn   = sqlite3.connect(db_path)
+            cursor = conn.execute(
+                """UPDATE interaction_session
+                   SET    session_end = 'AUTO_CLOSED'
+                   WHERE  session_end IS NULL
+                   AND    session_start < datetime('now', ?)""",
+                (f"-{hours} hours",),
+            )
+            closed_count = cursor.rowcount
+            conn.commit()
+            conn.close()
+        except sqlite3.Error as e:
+            logger.error("cleanup_stale_sessions DB error: %s", e)
+            return jsonify({"error": "Database error", "detail": str(e)}), 500
+
+        logger.info(
+            "cleanup_stale_sessions: auto-closed %d sessions (cutoff: %dh)",
+            closed_count, hours,
+        )
+        return jsonify({"closed": closed_count}), 200
+
+
+def close_stale_sessions(db_path: str, hours: int = 24) -> int:
+    try:
+        conn   = sqlite3.connect(db_path)
+        cursor = conn.execute(
+            """UPDATE interaction_session
+               SET    session_end = 'AUTO_CLOSED'
+               WHERE  session_end IS NULL
+               AND    session_start < datetime('now', ?)""",
+            (f"-{hours} hours",),
+        )
+        closed_count = cursor.rowcount
+        conn.commit()
+        conn.close()
+
+        if closed_count > 0:
+            logger.info(
+                "close_stale_sessions: auto-closed %d sessions on startup",
+                closed_count,
+            )
+        return closed_count
+
+    except Exception as e:
+        logger.error("close_stale_sessions error: %s", e)
+        return 0

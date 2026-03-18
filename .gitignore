@@ -19,9 +19,7 @@ wheels/
 
 .ipynb_checkpoints
 
-flask_cache/
-
-.curio/
+flask_cache/.curio/
 simple_example
 templates/
 
@@ -31,7 +29,11 @@ instance/
 node_modules/
 urbantk_cache/
 site/
-coverage/
-
-curio_docker_log.txt
+coverage/curio_docker_log.txt
 test_file.txt
+
+.curio/
+utk_curio/frontend/urban-workflows/.curio/
+utk_curio/flask_cache/
+venv/
+utk_curio/frontend/venv/

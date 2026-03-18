@@ -9,9 +9,13 @@ module.exports = {
     path: path.resolve(__dirname, "dist"),
   },
   resolve: {
-    extensions: [".tsx", ".ts", ".js"],
-    modules: [path.resolve(__dirname, 'src'), 'node_modules'],
+  extensions: [".tsx", ".ts", ".js"],
+  modules: [path.resolve(__dirname, 'src'), 'node_modules'],
+  alias: {
+    react: path.resolve(__dirname, "node_modules/react"),
+    "react-dom": path.resolve(__dirname, "node_modules/react-dom"),
   },
+},
   devtool: "source-map",
   module: {
     rules: [
