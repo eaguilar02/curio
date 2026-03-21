@@ -8,12 +8,16 @@ logger = logging.getLogger(__name__)
 
 
 def register_logging_routes(bp, get_db_path):
+
+    # =========================================================================
+    # POST /api/log/session/start
+    # =========================================================================
     @bp.route("/api/log/session/start", methods=["POST"])
     def start_logging_session():
         body = request.get_json(silent=True) or {}
 
-        user_id     = body.get("user_id", 1)
-        workflow_id = body.get("workflow_id")
+        user_id       = body.get("user_id", 1)
+        workflow_id   = body.get("workflow_id")
         session_start = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
 
         db_path = get_db_path()
@@ -41,6 +45,9 @@ def register_logging_routes(bp, get_db_path):
         }), 200
 
 
+    # =========================================================================
+    # POST /api/log/events
+    # =========================================================================
     @bp.route("/api/log/events", methods=["POST"])
     def log_events():
         body = request.get_json(silent=True)
@@ -48,10 +55,9 @@ def register_logging_routes(bp, get_db_path):
         if not body:
             return jsonify({"error": "Request body must be JSON"}), 400
 
-        session_id = body.get("session_id")
-        events     = body.get("events", [])
-
-        snapshot_ref = body.get("snapshot_ref")
+        session_id   = body.get("session_id")
+        events       = body.get("events", [])
+        snapshot_ref = body.get("snapshot_ref")   # Week 4: optional batch-level ref
 
         if session_id is None:
             return jsonify({"error": "Missing session_id"}), 400
@@ -106,11 +112,14 @@ def register_logging_routes(bp, get_db_path):
 
         logger.debug(
             "log_events: inserted %d events for session %s (snapshot_ref=%s)",
-            len(rows), session_id, snapshot_ref
+            len(rows), session_id, snapshot_ref,
         )
         return jsonify({"inserted": len(rows)}), 200
 
 
+    # =========================================================================
+    # GET /api/log/sessions
+    # =========================================================================
     @bp.route("/api/log/sessions", methods=["GET"])
     def list_sessions():
         workflow_id = request.args.get("workflow_id", type=int)
@@ -165,6 +174,9 @@ def register_logging_routes(bp, get_db_path):
         return jsonify({"sessions": [dict(r) for r in rows], "total": total}), 200
 
 
+    # =========================================================================
+    # GET /api/log/session/<session_id>/events
+    # =========================================================================
     @bp.route("/api/log/session/<int:session_id>/events", methods=["GET"])
     def get_session_events(session_id):
         limit      = request.args.get("limit",  200, type=int)
@@ -223,6 +235,41 @@ def register_logging_routes(bp, get_db_path):
         }), 200
 
 
+    # =========================================================================
+    # GET /api/log/session/<session_id>/snapshots   ← Week 5 NEW
+    # =========================================================================
+    @bp.route("/api/log/session/<int:session_id>/snapshots", methods=["GET"])
+    def get_session_snapshots(session_id):
+        """
+        Returns all graph snapshots for a session sorted by event_count ASC.
+        ReplayEngine.loadSession() calls this to find checkpoints for seekTo().
+        """
+        db_path = get_db_path()
+        try:
+            conn = sqlite3.connect(db_path)
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """SELECT snapshot_id, session_id, event_count,
+                          snapshot_time, graph_json
+                   FROM   graph_snapshot
+                   WHERE  session_id = ?
+                   ORDER  BY event_count ASC""",
+                (session_id,),
+            ).fetchall()
+            conn.close()
+        except sqlite3.Error as e:
+            logger.error("get_session_snapshots DB error: %s", e)
+            return jsonify({"error": "Database error", "detail": str(e)}), 500
+
+        return jsonify({
+            "session_id": session_id,
+            "snapshots":  [dict(r) for r in rows],
+        }), 200
+
+
+    # =========================================================================
+    # POST /api/log/snapshot
+    # =========================================================================
     @bp.route("/api/log/snapshot", methods=["POST"])
     def save_snapshot():
         body = request.get_json(silent=True)
@@ -269,6 +316,9 @@ def register_logging_routes(bp, get_db_path):
         return jsonify({"snapshot_id": snapshot_id, "event_count": event_count}), 200
 
 
+    # =========================================================================
+    # POST /api/log/session/end
+    # =========================================================================
     @bp.route("/api/log/session/end", methods=["POST"])
     def end_session():
         body        = request.get_json(silent=True) or {}
@@ -310,6 +360,9 @@ def register_logging_routes(bp, get_db_path):
         }), 200
 
 
+    # =========================================================================
+    # POST /api/log/sessions/cleanup
+    # =========================================================================
     @bp.route("/api/log/sessions/cleanup", methods=["POST"])
     def cleanup_stale_sessions():
         hours = request.args.get("hours", 24, type=int)
@@ -338,6 +391,9 @@ def register_logging_routes(bp, get_db_path):
         return jsonify({"closed": closed_count}), 200
 
 
+# =============================================================================
+# close_stale_sessions — module-level function called from routes.py on startup
+# =============================================================================
 def close_stale_sessions(db_path: str, hours: int = 24) -> int:
     try:
         conn   = sqlite3.connect(db_path)

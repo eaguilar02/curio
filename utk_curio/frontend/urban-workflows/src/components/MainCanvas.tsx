@@ -32,6 +32,7 @@ import html2canvas from "html2canvas";
 
 import FloatingBox from "./FloatingBox";
 import WorkflowGoal from "./menus/top/WorkflowGoal";
+import { ReplayPage } from "./replay/ReplayPage";
 
 export function MainCanvas() {
     const {
@@ -49,6 +50,7 @@ export function MainCanvas() {
     const [isDragging, setIsDragging] = useState(false);
     const [startPos, setStartPos] = useState<any>(null);
     const [boundingBox, setBoundingBox] = useState<any>(null);
+    const [showReplay, setShowReplay] = useState(false);
 
     useEffect(() => {
         const handleMouseDown = (e: any) => {
@@ -115,13 +117,12 @@ export function MainCanvas() {
         workflowGoal
     } = useFlowContext();
 
-    const [selectedEdgeId, setSelectedEdgeId] = useState<string>(""); // can only remove selected edges
+    const [selectedEdgeId, setSelectedEdgeId] = useState<string>("");
 
     const [isComponentsSelected, setIsComponentsSelected] = useState<boolean>(false); 
 
     const [floatingBoxes, setFloatingBoxes] = useState<any>({});
 
-    // Selecting boxes to generate explanation
     const [selectedComponents, setSelectedComponents] = useState<any>({});
 
     const [dashboardOn, setDashboardOn] = useState<boolean>(false);
@@ -137,7 +138,7 @@ export function MainCanvas() {
                 canvas.toBlob((blob) => {
                     if (blob) {
                         const url = URL.createObjectURL(blob);
-                        resolve(url); // Return the URL
+                        resolve(url);
                     } else {
                         resolve(null);
                     }
@@ -147,8 +148,6 @@ export function MainCanvas() {
     }
 
     const generateExplanation = async (_: React.MouseEvent<HTMLButtonElement>) => {
-
-        // Take a screenshot for the explanation
         let image_url = await captureScreenshot();
 
         let trill_spec = TrillGenerator.generateTrill(selectedComponents.nodes, selectedComponents.edges, workflowNameRef.current, workflowGoal);
@@ -177,7 +176,6 @@ export function MainCanvas() {
     }
 
     const generateDebug = async (_: React.MouseEvent<HTMLButtonElement>) => {
-        // Take a screenshot for the debugging
         let image_url = await captureScreenshot();
 
         let trill_spec = TrillGenerator.generateTrill(selectedComponents.nodes, selectedComponents.edges, workflowNameRef.current, workflowGoal);
@@ -203,10 +201,8 @@ export function MainCanvas() {
         .catch((error: any) => {
             console.error("Error:", error);
         });
-
     }
 
-    // Delete a floating box from the list based on the id
     const deleteFloatingBox = (id: string) => {
         setFloatingBoxes((prevFloatingBoxes: any) => {
             const newFloatingBoxes = { ...prevFloatingBoxes };
@@ -215,31 +211,11 @@ export function MainCanvas() {
         });
     }
 
-    // Apply dashboard mode changes
     const handleDashboardToggle = (value: boolean) => {
         setDashboardOn(value);
         setDashBoardMode(value);
     };
 
-    // const handleWheel = (e: React.WheelEvent) => {
-
-    //     // e.preventDefault();
-
-    //     // Adjust this factor to control zoom speed (lower = smoother/slower)
-    //     const zoomIntensity = 0.0015;
-
-    //     const mouseScreen = { x: e.clientX, y: e.clientY };
-    //     const mouseFlow = screenToFlowPosition(mouseScreen);
-
-    //     const currentZoom = getZoom();
-    //     const nextZoom = Math.min(Math.max(currentZoom * (1 - e.deltaY * zoomIntensity), 0.05), 2);
-    //     const newX = mouseScreen.x - mouseFlow.x * nextZoom;
-    //     const newY = mouseScreen.y - mouseFlow.y * nextZoom;
-
-    //     setViewport({ x: newX, y: newY, zoom: nextZoom }, { duration: 200 });
-    // };
-
-    // Filter nodes based on dashboard mode
     const filteredNodes = useMemo(() => {
         if (!dashboardOn) return nodes;
         return nodes.filter(node => dashboardPins[node.id]);
@@ -264,7 +240,7 @@ export function MainCanvas() {
                     height: 64px;
                     border-radius: 50%;
                     border: 6px solid rgba(255,255,255,0.15);
-                    border-top-color: #fff;        /* visible on black */
+                    border-top-color: #fff;
                     animation: plug-rotate 0.9s linear infinite;
                     }
                     @keyframes plug-rotate {
@@ -285,11 +261,40 @@ export function MainCanvas() {
 
     return (
         <>
+        {showReplay && (
+            <div style={{
+                position: "fixed",
+                inset:    0,
+                zIndex:   9999,
+                background: "#f4f6f8",
+            }}>
+                <button
+                    onClick={() => setShowReplay(false)}
+                    style={{
+                        position:     "fixed",
+                        top:          12,
+                        right:        16,
+                        zIndex:       10000,
+                        background:   "#dc2626",
+                        color:        "#fff",
+                        border:       "none",
+                        borderRadius: "6px",
+                        padding:      "5px 16px",
+                        cursor:       "pointer",
+                        fontWeight:   700,
+                        fontSize:     "13px",
+                    }}
+                >
+                    ✕ Close Replay
+                </button>
+                <ReplayPage />
+            </div>
+        )}
+
         {!loading ? <div
             style={{ width: "100vw", height: "100vh" }}
             onContextMenu={onContextMenu}
             onClick={closeFileMenu}
-            // onWheelCapture={handleWheel}
         >
             {Object.keys(floatingBoxes).map((key, index) => (
                 <FloatingBox
@@ -301,7 +306,6 @@ export function MainCanvas() {
                 />
             ))}
             <ReactFlow
-                // zoomOnScroll={false}
                 nodes={filteredNodes}
                 edges={edges}
                 onDragOver={(event) => {
@@ -314,12 +318,6 @@ export function MainCanvas() {
                     const type = event.dataTransfer.getData("application/reactflow") as BoxType;
                     if (!type) return;
             
-                    // const bounds = event.currentTarget.getBoundingClientRect();
-                    // const position = {
-                    //     x: event.clientX,
-                    //     y: event.clientY,
-                    // };
-
                     const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
             
                     createCodeNode(type, {position})
@@ -420,7 +418,7 @@ export function MainCanvas() {
                         all_y.push(node.position.y);    
                     }
 
-                    if(selection.nodes.length + selection.edges.length > 1){ // There is more than one element selected
+                    if(selection.nodes.length + selection.edges.length > 1){
                         setIsComponentsSelected(true);
                     }else{
                         setIsComponentsSelected(false);
@@ -458,6 +456,32 @@ export function MainCanvas() {
                 />
                 <Background />
                 <Controls />
+
+                <button
+                    onClick={() => setShowReplay(true)}
+                    title="Open session replay"
+                    style={{
+                        position:     "absolute",
+                        bottom:       "110px",
+                        left:         "12px",
+                        zIndex:       10,
+                        padding:      "6px 14px",
+                        background:   "#1e3a5f",
+                        color:        "#fff",
+                        border:       "none",
+                        borderRadius: "6px",
+                        cursor:       "pointer",
+                        fontSize:     "12px",
+                        fontWeight:   700,
+                        display:      "flex",
+                        alignItems:   "center",
+                        gap:          "5px",
+                        boxShadow:    "0 1px 4px rgba(0,0,0,0.25)",
+                    }}
+                >
+                    🎞 Replay
+                </button>
+
                 { isComponentsSelected ? (
                     <button
                         id={"explainButton"}
