@@ -7,7 +7,8 @@ export type EventType =
   | "PARAM_CHANGED"
   | "NODE_EXECUTED"
   | "EXECUTION_COMPLETED"
-  | "SESSION_STARTED";
+  | "SESSION_STARTED"
+  | "SESSION_RESTORED";
 
 
 export interface NodeAddedData {
@@ -55,6 +56,7 @@ export interface ExecutionCompletedData {
   success: boolean;
   durationMs?: number;
   error?: string;
+  outputPath?: string;
 }
 
 export interface SessionStartedData {
@@ -62,6 +64,10 @@ export interface SessionStartedData {
   workflowId?: number | null;
 }
 
+export interface SessionRestoredData {
+  nodeCount: number;
+  edgeCount: number;
+}
 
 export type AnyEventData =
   | NodeAddedData
@@ -72,7 +78,8 @@ export type AnyEventData =
   | ParamChangedData
   | NodeExecutedData
   | ExecutionCompletedData
-  | SessionStartedData;
+  | SessionStartedData
+  | SessionRestoredData;
 
 
 export interface LogEvent {

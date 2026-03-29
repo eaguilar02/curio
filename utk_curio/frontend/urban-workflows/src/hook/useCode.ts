@@ -32,7 +32,7 @@ interface IUseCode {
 }
 
 export function useCode(): IUseCode {
-    const { addNode, setOutputs, setInteractions, applyNewPropagation, applyNewOutput, loadParsedTrill } = useFlowContext();
+    const { addNode, setOutputs, setInteractions, applyNewPropagation, applyNewOutput} = useFlowContext();
     const { getPosition } = usePosition();
 
     const outputCallback = useCallback(
@@ -143,14 +143,6 @@ export function useCode(): IUseCode {
 
             edges.push(add_edge);
         }
-
-        if(suggestionType == undefined)
-            loadParsedTrill(trill.dataflow.name, trill.dataflow.task, nodes, edges, true, false); 
-        else if(suggestionType == "workflow")
-            loadParsedTrill(trill.dataflow.name, trill.dataflow.task, nodes, edges, false, true); // if loading as suggestion deactivate provenance and merge
-        else
-            loadParsedTrill(trill.dataflow.name, trill.dataflow.task, nodes, edges, false, true); 
-
     }
 
     const generateCodeNode = useCallback((boxType: string, options: CreateCodeNodeOptions = {}) => {

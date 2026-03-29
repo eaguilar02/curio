@@ -70,6 +70,7 @@
     "@rollup/plugin-json": "^6.0.0",
     "@rollup/plugin-node-resolve": "^15.0.2",
     "@rollup/plugin-terser": "^0.4.1",
+    "@rollup/plugin-typescript": "^12.3.0",
     "@types/d3": "^6.2.0",
     "@types/gl-matrix": "^2.4.5",
     "@types/jquery": "^3.5.16",

@@ -13,7 +13,11 @@ import { ReplayControls } from './ReplayControls';
 
 const API_BASE = 'http://localhost:5002';
 
-export const ReplayPage: React.FC = () => {
+interface ReplayPageProps {
+  onRestore?: (nodes: any[], edges: any[]) => void;
+}
+
+export const ReplayPage: React.FC<ReplayPageProps> = ({ onRestore }) => {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [sessionsErr, setSessionsErr] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -130,7 +134,7 @@ export const ReplayPage: React.FC = () => {
         )}
 
         <span style={{ marginLeft: 'auto', color: '#64748b', fontSize: '11px' }}>
-          Week 5 — Curio Replay Engine
+          
         </span>
       </div>
 
@@ -155,7 +159,7 @@ export const ReplayPage: React.FC = () => {
           display: 'flex',
           flexDirection: 'column',
         }}>
-          <ReplayControls engine={engine} engineState={engineState} />
+          <ReplayControls engine={engine} engineState={engineState} onRestore={onRestore} />
         </div>
       </div>
     </div>

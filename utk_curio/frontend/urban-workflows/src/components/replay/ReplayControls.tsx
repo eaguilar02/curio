@@ -11,6 +11,7 @@ const PLAY_INTERVAL_MS = 800;
 
 const ET_COLOUR: Record<string, { bg: string; text: string }> = {
   SESSION_STARTED:     { bg: '#ede9fe', text: '#4c1d95' },
+  SESSION_RESTORED:    { bg: '#e0f2fe', text: '#0c4a6e' },
   NODE_ADDED:          { bg: '#d1fae5', text: '#065f46' },
   NODE_REMOVED:        { bg: '#fee2e2', text: '#7f1d1d' },
   NODE_MOVED:          { bg: '#dbeafe', text: '#1e3a8a' },
@@ -28,9 +29,10 @@ function etStyle(type: string) {
 interface ReplayControlsProps {
   engine:      ReplayEngine;
   engineState: ReplayEngineState;
+  onRestore?:  (nodes: any[], edges: any[]) => void;
 }
 
-export const ReplayControls: React.FC<ReplayControlsProps> = ({ engine, engineState }) => {
+export const ReplayControls: React.FC<ReplayControlsProps> = ({ engine, engineState, onRestore }) => {
   const { cursor, events, loaded, loading } = engineState;
   const [isPlaying, setIsPlaying] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -312,12 +314,35 @@ export const ReplayControls: React.FC<ReplayControlsProps> = ({ engine, engineSt
         })}
       </div>
 
+      <button
+        disabled={!loaded || engineState.currentGraph.nodes.length === 0}
+        style={{
+          width:        '100%',
+          padding:      '7px',
+          fontSize:     '13px',
+          fontWeight:   700,
+          borderRadius: '6px',
+          border:       'none',
+          cursor:       (!loaded || engineState.currentGraph.nodes.length === 0) ? 'not-allowed' : 'pointer',
+          opacity:      (!loaded || engineState.currentGraph.nodes.length === 0) ? 0.38 : 1,
+          background:   '#1e3a5f',
+          color:        '#fff',
+        }}
+        onClick={() => {
+          if (!window.confirm(`Restore canvas to step ${cursor} of ${total}?\n\nThis will replace the current workflow.`)) return;
+          onRestore?.(engineState.currentGraph.nodes, engineState.currentGraph.edges);
+        }}
+      >
+        Restore to step {cursor}
+      </button>
+
       {loading && (
         <div style={{ fontSize: '11px', color: '#1a8f8a', textAlign: 'center' }}>
           Loading…
         </div>
       )}
     </div>
+
   );
 };
 

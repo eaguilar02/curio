@@ -87,64 +87,6 @@ export function useWorkflowOperations(deps: WorkflowOperationsDeps) {
         setNodes((prevNodes: Node[]) => updateNodeData(prevNodes, nodeId, () => ({ ...newData })));
     }
 
-    const loadParsedTrill = async (workflowName: string, task: string, loaded_nodes: any, loaded_edges: any, provenance?: boolean, merge?: boolean) => {
-        if (!merge) {
-            TrillGenerator.reset();
-            setWorkflowName(workflowName);
-            await addWorkflow(workflowName);
-            const empty_trill = TrillGenerator.generateTrill([], [], workflowName);
-            TrillGenerator.intializeProvenance(empty_trill);
-            console.log("loadParsedTrill reseting nodes");
-            setNodes(() => []);
-        }
-
-        if (merge) {
-            // Use reactFlow to get fresh state (avoid stale closure)
-            const currentNodeIds = new Set(reactFlow.getNodes().map((n: Node) => n.id));
-            for (const node of loaded_nodes) {
-                if (!currentNodeIds.has(node.id)) {
-                    addNode(node, workflowName, provenance);
-                }
-            }
-        } else {
-            for (const node of loaded_nodes) {
-                addNode(node, workflowName, provenance);
-            }
-        }
-
-        if (!merge) {
-            setEdges(() => []);
-        }
-
-        // Use reactFlow to get fresh edge ids (avoid stale closure)
-        const currentEdgeIds = new Set(reactFlow.getEdges().map((e: Edge) => e.id));
-
-        console.log("loadParsedTrill second");
-        setNodes((prevNodes: any) => {
-            if (merge) {
-                for (const edge of loaded_edges) {
-                    if (!currentEdgeIds.has(edge.id)) {
-                        onConnect(edge, prevNodes, undefined, workflowName, provenance);
-                    }
-                }
-            } else {
-                for (const edge of loaded_edges) {
-                    onConnect(edge, prevNodes, undefined, workflowName, provenance);
-                }
-            }
-
-            if (!merge) {
-                setOutputs([]);
-                setInteractions([]);
-                setDashboardPins({});
-                setPositionsInDashboard({});
-                setPositionsInWorkflow({});
-            }
-
-            setFitViewOnLoad(true);
-            return prevNodes;
-        });
-    }
 
     const updateDefaultCode = (nodeId: string, content: string) => {
         console.log("updateDefaultCode");
@@ -403,7 +345,6 @@ export function useWorkflowOperations(deps: WorkflowOperationsDeps) {
 
         // Operations
         updateDataNode,
-        loadParsedTrill,
         updateDefaultCode,
         updateKeywords,
         updateSubtasks,

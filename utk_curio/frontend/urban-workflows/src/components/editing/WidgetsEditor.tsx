@@ -146,6 +146,14 @@ except Exception as e:
     return df`;
             }
 
+            const execStart = Date.now();
+            EventInterceptor.getInstance().capture({
+                event_type: 'NODE_EXECUTED',
+                node_id: nodeId,
+                event_time: EventInterceptor.now(),
+                event_data: { triggerSource: 'file_upload' },
+            });
+
             data.pythonInterpreter.interpretCode(
                 pythonCode,
                 pythonCode,
@@ -153,6 +161,18 @@ except Exception as e:
                 data.inputTypes,
                 (result: any) => {
                     setIsProcessing(false);
+
+                    EventInterceptor.getInstance().capture({
+                        event_type: 'EXECUTION_COMPLETED',
+                        node_id: nodeId,
+                        event_time: EventInterceptor.now(),
+                        event_data: {
+                            success: !result.stderr || result.stderr.trim() === "",
+                            durationMs: Date.now() - execStart,
+                            error: result.stderr?.trim() || undefined,
+                            outputPath: result.output?.path ?? undefined,
+                        },
+                    });
 
                     if (result.stderr && result.stderr.trim() !== "") {
                         setUploadResult({ success: false, message: "Python execution error: " + result.stderr, savedPath: null });
@@ -470,6 +490,7 @@ except Exception as e:
         EventInterceptor.getInstance().capture({
             event_type: "PARAM_CHANGED",
             node_id: nodeId,
+            event_time: EventInterceptor.now(),
             event_data: {
                 paramName: variable,
                 oldValue,

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import ReactFlow, {
   Background,
   Controls,
@@ -7,6 +7,7 @@ import ReactFlow, {
   Edge,
   MarkerType,
   BackgroundVariant,
+  useReactFlow,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 
@@ -113,6 +114,7 @@ function toRFEdge(re: ReplayEdge): Edge {
 
 const EVENT_TYPE_LABELS: Record<string, string> = {
   SESSION_STARTED:      '● Session started',
+  SESSION_RESTORED:     '⏮ Session restored',
   NODE_ADDED:           '+ Node added',
   NODE_REMOVED:         '− Node removed',
   NODE_MOVED:           '↕ Node moved',
@@ -137,6 +139,20 @@ export const ReplayCanvas: React.FC<ReplayCanvasProps> = ({ engineState }) => {
     loaded,
     lastAppliedEvent,
   } = engineState;
+
+  const { fitView } = useReactFlow();
+  const prevNodeCount = useRef(0);
+
+  // Fit all nodes into view whenever a node is added
+  useEffect(() => {
+    const count = currentGraph.nodes.length;
+    if (count > prevNodeCount.current) {
+      const id = setTimeout(() => fitView({ padding: 0.25, duration: 400 }), 50);
+      prevNodeCount.current = count;
+      return () => clearTimeout(id);
+    }
+    prevNodeCount.current = count;
+  }, [currentGraph.nodes.length, fitView]);
 
   const rfNodes: Node[] = useMemo(
     () => currentGraph.nodes.map(toRFNode),

@@ -1,5 +1,5 @@
 import "reactflow/dist/style.css";
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useCallback } from "react";
 import ReactFlow, {
     Background,
     ConnectionMode,
@@ -27,7 +27,6 @@ import "./MainCanvas.css";
 import LLMChat from "./LLMChat";
 import { useLLMContext } from "../providers/LLMProvider";
 import { TrillGenerator } from "../TrillGenerator";
-
 import html2canvas from "html2canvas";
 
 import FloatingBox from "./FloatingBox";
@@ -45,6 +44,7 @@ export function MainCanvas() {
         isValidConnection,
         onEdgesDelete,
         onNodesDelete,
+        restoreGraph
     } = useFlowContext();
 
     const [isDragging, setIsDragging] = useState(false);
@@ -116,6 +116,16 @@ export function MainCanvas() {
         workflowNameRef,
         workflowGoal
     } = useFlowContext();
+
+    const handleReplayRestore = useCallback((replayNodes: any[], replayEdges: any[]) => {
+        const cleanNodes = replayNodes.map(({ _changed, _dimmed, ...n }: any) => ({
+            ...n,
+            data: { ...n.data, _executing: undefined, _execSuccess: undefined, _execError: undefined, _outputPath: undefined },
+        }));
+        const cleanEdges = replayEdges.map(({ _changed, ...e }: any) => e);
+        restoreGraph(cleanNodes, cleanEdges);
+        setShowReplay(false);
+    }, [restoreGraph, workflowNameRef]);
 
     const [selectedEdgeId, setSelectedEdgeId] = useState<string>("");
 
@@ -272,7 +282,7 @@ export function MainCanvas() {
                     onClick={() => setShowReplay(false)}
                     style={{
                         position:     "fixed",
-                        top:          12,
+                        top:          9,
                         right:        16,
                         zIndex:       10000,
                         background:   "#dc2626",
@@ -287,7 +297,7 @@ export function MainCanvas() {
                 >
                     ✕ Close Replay
                 </button>
-                <ReplayPage />
+                <ReplayPage onRestore={handleReplayRestore} />
             </div>
         )}
 
@@ -462,8 +472,8 @@ export function MainCanvas() {
                     title="Open session replay"
                     style={{
                         position:     "absolute",
-                        bottom:       "110px",
-                        left:         "12px",
+                        bottom:       "10px",
+                        left:         "64px",
                         zIndex:       10,
                         padding:      "6px 14px",
                         background:   "#1e3a5f",
@@ -471,7 +481,7 @@ export function MainCanvas() {
                         border:       "none",
                         borderRadius: "6px",
                         cursor:       "pointer",
-                        fontSize:     "12px",
+                        fontSize:     "16px",
                         fontWeight:   700,
                         display:      "flex",
                         alignItems:   "center",
@@ -479,7 +489,7 @@ export function MainCanvas() {
                         boxShadow:    "0 1px 4px rgba(0,0,0,0.25)",
                     }}
                 >
-                    🎞 Replay
+                    🎞  Replay
                 </button>
 
                 { isComponentsSelected ? (

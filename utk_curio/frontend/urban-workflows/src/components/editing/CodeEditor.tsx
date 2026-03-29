@@ -73,10 +73,12 @@ function CodeEditor({
         EventInterceptor.getInstance().capture({
             event_type: "EXECUTION_COMPLETED",
             node_id: data.nodeId,
+            event_time: EventInterceptor.now(),
             event_data: {
                 success: result.stderr == "",
                 durationMs,
                 error: result.stderr ? result.stderr : undefined,
+                outputPath: result.output?.path ?? undefined,
             },
         });
 

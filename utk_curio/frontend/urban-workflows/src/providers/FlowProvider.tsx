@@ -29,7 +29,8 @@ import { applyDashboardLayout } from "../utils/dashboardLayout";
 import { ensureMergeArrays, parseHandleIndex, setMergeSlot, clearMergeSlot } from "../utils/mergeFlowUtils";
 import { useWorkflowOperations } from "../hook/useWorkflowOperations";
 import { EventInterceptor } from "../logging/EventInterceptor";
-
+import { SnapshotManager } from "logging/SnapshotManager";
+import { EventBuffer } from "logging/EventBuffer";
 
 export interface IOutput {
     nodeId: string;
@@ -79,7 +80,6 @@ interface FlowContextProps {
     loading: boolean;
 
     applyRemoveChanges: (changes: NodeRemoveChange[]) => void;
-    loadParsedTrill: (workflowName: string, task: string, node: any, edges: any, provenance?: boolean, merge?: boolean) => void;
     updateDataNode: (nodeId: string, newData: any) => void;
     updateWarnings: (trill_spec: any) => void;
     updateDefaultCode: (nodeId: string, content: string) => void;
@@ -89,6 +89,7 @@ interface FlowContextProps {
     eraseWorkflowSuggestions: () => void;
     acceptSuggestion: (nodeId: string) => void;
     updateKeywords: (trill: any) => void;
+    restoreGraph: (nodes: Node[], edges: Edge[]) => void;
 
     getGraphState: () => { nodes: Node[]; edges: Edge[] };
 }
@@ -134,7 +135,7 @@ export const FlowContext = createContext<FlowContextProps>({
     updateWarnings: () => {},
     cleanCanvas: () => {},
     acceptSuggestion: () => {},
-    loadParsedTrill: async () => { },
+    restoreGraph: () => { },
 
     getGraphState: () => ({ nodes: [], edges: [] }),
 });
@@ -265,6 +266,7 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
             eventInterceptor.capture({
                 event_type: "NODE_ADDED",
                 node_id: node.id,
+                event_time: EventInterceptor.now(),
                 event_data: {
                     nodeType: String(node.type ?? ""),
                     position: {
@@ -279,6 +281,22 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
                 newBox((customWorkflowName ? customWorkflowName : workflowNameRef.current), (node.type as string) + "-" + node.id);
         },
         [setNodes, eventInterceptor]
+    );
+
+    const restoreGraph = useCallback(
+        (nodes: Node[], edges: Edge[]) => {
+            setNodes(nodes);
+            setEdges(edges);
+            eventInterceptor.capture({
+                event_type: "SESSION_RESTORED",
+                node_id: null,
+                event_time: EventInterceptor.now(),
+                event_data: { nodeCount: nodes.length, edgeCount: edges.length },
+            });
+            EventBuffer.getInstance().flush();
+            setTimeout(() => SnapshotManager.getInstance().takeSnapshot(), 100);
+        },
+        [setNodes, setEdges, eventInterceptor]
     );
 
     const applyOutput = (
@@ -325,6 +343,7 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
                 eventInterceptor.capture({
                     event_type: "EDGE_REMOVED",
                     node_id: null,
+                    event_time: EventInterceptor.now(),
                     event_data: {
                         sourceNodeId: String(connection.source ?? ""),
                         targetNodeId: String(connection.target ?? ""),
@@ -393,6 +412,7 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
                         eventInterceptor.capture({
                             event_type: "NODE_REMOVED",
                             node_id: change.id,
+                            event_time: EventInterceptor.now(),
                             event_data: {
                                 nodeType: String(node.type ?? ""),
                                 label: node.data?.label,
@@ -514,6 +534,7 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
                     eventInterceptor.capture({
                         event_type: "EDGE_CREATED",
                         node_id: null,
+                        event_time: EventInterceptor.now(),
                         event_data: {
                             sourceNodeId: String(connection.source ?? ""),
                             targetNodeId: String(connection.target ?? ""),
@@ -753,6 +774,8 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
     useEffect(() => {
         applyNewInteractions();
     }, [interactions]);
+    
+
 
     const workflowOps = useWorkflowOperations({
         nodes, edges,
@@ -792,7 +815,7 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
                 loading,
 
                 getGraphState,
-
+                restoreGraph,
                 ...workflowOps,
             }}
         >

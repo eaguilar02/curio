@@ -272,6 +272,7 @@ export class ReplayEngine {
                     _executing: false,
                     _execSuccess: data.success ?? true,
                     _execError: data.error ?? null,
+                    _outputPath: (data as any).outputPath ?? n.data._outputPath ?? null,
                   },
                   _changed: true,
                   _dimmed: false,
