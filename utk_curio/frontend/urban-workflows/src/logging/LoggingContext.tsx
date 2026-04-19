@@ -17,15 +17,17 @@ const LoggingContext = createContext<LoggingContextValue>({
 });
 
 interface LoggingProviderProps {
-  children:       React.ReactNode;
-  workflowId?:    number | null;
-  userId?:        number;
-  getGraphState?: () => GraphState | null;
+  children:          React.ReactNode;
+  workflowId?:       number | null;
+  workflowName?:     string;
+  userId?:           number;
+  getGraphState?:    () => GraphState | null;
 }
 
 export function LoggingProvider({
   children,
   workflowId    = null,
+  workflowName  = 'DefaultWorkflow',
   userId        = 1,
   getGraphState = () => null,
 }: LoggingProviderProps): JSX.Element {
@@ -52,8 +54,9 @@ export function LoggingProvider({
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({
-        user_id:     userId,
-        workflow_id: workflowId,
+        user_id:       userId,
+        workflow_id:   workflowId,
+        workflow_name: workflowName,
       }),
     })
       .then(r => r.json())

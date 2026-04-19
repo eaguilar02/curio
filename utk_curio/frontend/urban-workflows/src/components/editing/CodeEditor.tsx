@@ -11,6 +11,7 @@ import { useFlowContext } from "../../providers/FlowProvider";
 import { useProvenanceContext } from "../../providers/ProvenanceProvider";
 import { ICodeData } from "../../types";
 import { EventInterceptor } from "../../logging/EventInterceptor";
+import { SnapshotManager } from "../../logging/SnapshotManager";
 
 type CodeEditorProps = {
     setOutputCallback: any;
@@ -37,7 +38,8 @@ function CodeEditor({
     defaultValue,
     floatCode,
 }: CodeEditorProps) {
-    const [code, setCode] = useState<string>(""); // code with all original markers
+    console.debug(`[CodeEditor mount] defaultValue="${(defaultValue ?? "").slice(0,60)}"`);
+    const [code, setCode] = useState<string>(defaultValue ?? ""); // code with all original markers
 
     const { workflowNameRef } = useFlowContext();
     const { boxExecProv } = useProvenanceContext();
@@ -52,6 +54,7 @@ function CodeEditor({
     };
 
     useEffect(() => {
+        console.debug(`[CodeEditor defaultValue effect] bypass=${defaultValueBypass.current} defaultValue="${(defaultValue ?? "").slice(0,60)}"`);
         if (defaultValue != undefined && defaultValueBypass.current) {
             setCode(defaultValue);
             sendCodeToWidgets(defaultValue); // will resolve markers for templated boxes
@@ -81,6 +84,8 @@ function CodeEditor({
                 outputPath: result.output?.path ?? undefined,
             },
         });
+
+        SnapshotManager.getInstance().takeSnapshot();
 
         let outputContent = "";
         outputContent += "stdout:\n" + result.stdout.slice(0, 100);

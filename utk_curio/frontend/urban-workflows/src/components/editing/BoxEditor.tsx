@@ -72,7 +72,7 @@ function BoxEditor({
     disableWidgets,
 }: BoxEditorProps) {
     const [userCode, setUserCode] = useState<string>(""); // python or grammar with marks unresolved
-    const [defaultCode, setDefaultCode] = useState<string>("");
+    const [defaultCode, setDefaultCode] = useState<string>(defaultValue ?? "");
     const [markersDirty, setMarkersDirty] = useState<boolean>(false); // make WidgetsEditor update replacedCode
     const [replacedCode, setReplacedCode] = useState<string>(""); // python or grammar with marks resolved
     const [replacedCodeDirty, setReplacedCodeDirty] = useState<boolean>(false); // code has to rerun every time button is pressed (having changes or not)

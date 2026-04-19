@@ -20,6 +20,7 @@ export interface SessionSummary {
   session_id:    number;
   user_id:       number | null;
   workflow_id:   number | null;
+  workflow_name: string | null;
   session_start: string;
   session_end:   string | null;
   event_count:   number;

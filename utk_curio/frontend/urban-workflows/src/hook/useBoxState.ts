@@ -3,6 +3,11 @@ import { BoxType } from '../constants';
 import { Template, useTemplateContext } from '../providers/TemplateProvider';
 import { useUserContext } from '../providers/UserProvider';
 
+// Module-level registry: nodeId → latest code, updated synchronously outside React's render cycle.
+// getGraphState reads from here so snapshots always capture the most recent editor content
+// regardless of React effect timing.
+export const nodeCodeRegistry = new Map<string, string>();
+
 export interface BoxOutput {
   code: string;
   content: string;
@@ -21,7 +26,13 @@ export function useBoxState(data: any, boxType: BoxType) {
   const { editUserTemplate } = useTemplateContext();
   const { user } = useUserContext();
 
-  useEffect(() => { data.code = code; }, [code]);
+  useEffect(() => {
+    data.code = code;
+    if (data.nodeId && code) {
+      console.debug(`[useBoxState registry] node=${data.nodeId} code="${code.slice(0,60)}"`);
+      nodeCodeRegistry.set(data.nodeId, code);
+    }
+  }, [data, code]);
 
   useEffect(() => { data.output = output; }, [output]);
 

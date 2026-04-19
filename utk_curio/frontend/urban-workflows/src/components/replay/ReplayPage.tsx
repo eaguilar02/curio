@@ -61,6 +61,14 @@ export const ReplayPage: React.FC<ReplayPageProps> = ({ onRestore }) => {
     return `#${s.session_id} | ${date} | ${evts} events${state}`;
   }
 
+  // Group sessions by workflow_name
+  const grouped = sessions.reduce<Record<string, SessionSummary[]>>((acc, s) => {
+    const key = s.workflow_name ?? 'Unnamed';
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(s);
+    return acc;
+  }, {});
+
   return (
     <div style={{
       display: 'flex',
@@ -99,10 +107,14 @@ export const ReplayPage: React.FC<ReplayPageProps> = ({ onRestore }) => {
             }}
           >
             <option value="">— select a session —</option>
-            {sessions.map(s => (
-              <option key={s.session_id} value={s.session_id}>
-                {sessionLabel(s)}
-              </option>
+            {Object.entries(grouped).map(([name, group]) => (
+              <optgroup key={name} label={name}>
+                {group.map(s => (
+                  <option key={s.session_id} value={s.session_id}>
+                    {sessionLabel(s)}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
         )}

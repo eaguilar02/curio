@@ -663,11 +663,26 @@ def new_box_prov():
     # // new activity (pointing to the new workflow and to the new relation as output)
     # // duplicate all activities that point to the old workflow and point to the new one (duplicate relations tied to activities)
 
-    data = request.json.get('data')
+    data = request.json.get('data') if request.json else None
+    if not data or 'workflow_name' not in data:
+        return jsonify({"error": "Missing workflow_name"}), 400
 
     # last workflow created with this name
     cursor.execute("SELECT * FROM workflow WHERE workflow_id = (SELECT MAX(workflow_id) FROM workflow WHERE workflow_name = ?)", (data['workflow_name'],))
     old_workflow = cursor.fetchone()
+
+    # If no workflow exists yet, bootstrap it automatically
+    if old_workflow is None:
+        cursor.execute("INSERT INTO version (version_number) VALUES (?)", ('1.0',))
+        conn.commit()
+        version_id = cursor.lastrowid
+        cursor.execute("INSERT INTO versionedElement (version_id) VALUES (?)", (version_id,))
+        conn.commit()
+        ve_id = cursor.lastrowid
+        cursor.execute("INSERT INTO workflow (workflow_name, ve_id) VALUES (?, ?)", (data['workflow_name'], ve_id))
+        conn.commit()
+        cursor.execute("SELECT * FROM workflow WHERE workflow_id = ?", (cursor.lastrowid,))
+        old_workflow = cursor.fetchone()
 
     # getting versionedElement attached to the old workflow
     cursor.execute("SELECT * FROM versionedElement WHERE ve_id = ?", (old_workflow[2],))

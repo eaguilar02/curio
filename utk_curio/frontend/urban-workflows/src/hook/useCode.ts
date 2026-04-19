@@ -29,6 +29,8 @@ type CreateCodeNodeOptions = {
 interface IUseCode {
     createCodeNode: (boxType: string, options?: CreateCodeNodeOptions) => void;
     loadTrill: (trill: any, suggestionType?: string) => void;
+    outputCallback: (nodeId: string, output: string) => void;
+    interactionsCallback: (interactions: any, nodeId: string) => void;
 }
 
 export function useCode(): IUseCode {
@@ -201,5 +203,5 @@ export function useCode(): IUseCode {
         addNode(node, undefined, true);
     }, [addNode, outputCallback, getPosition]);
 
-    return { createCodeNode, loadTrill };
+    return { createCodeNode, loadTrill, outputCallback, interactionsCallback };
 }

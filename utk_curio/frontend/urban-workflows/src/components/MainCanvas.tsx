@@ -32,6 +32,9 @@ import html2canvas from "html2canvas";
 import FloatingBox from "./FloatingBox";
 import WorkflowGoal from "./menus/top/WorkflowGoal";
 import { ReplayPage } from "./replay/ReplayPage";
+import { PythonInterpreter } from "../PythonInterpreter";
+
+const pythonInterpreter = new PythonInterpreter();
 
 export function MainCanvas() {
     const {
@@ -87,7 +90,7 @@ export function MainCanvas() {
     }, [isDragging, startPos, boundingBox]);
 
     const { onContextMenu, showMenu, menuPosition } = useRightClickMenu();
-    const { createCodeNode } = useCode();
+    const { createCodeNode, outputCallback, interactionsCallback } = useCode();
     const { openAIRequest, AIModeRef, setAIMode } = useLLMContext();
 
     const nodeTypes = useMemo(() => {
@@ -114,18 +117,32 @@ export function MainCanvas() {
         updatePositionWorkflow,
         updatePositionDashboard,
         workflowNameRef,
-        workflowGoal
+        workflowGoal,
+        applyNewPropagation,
     } = useFlowContext();
 
     const handleReplayRestore = useCallback((replayNodes: any[], replayEdges: any[]) => {
         const cleanNodes = replayNodes.map(({ _changed, _dimmed, ...n }: any) => ({
             ...n,
-            data: { ...n.data, _executing: undefined, _execSuccess: undefined, _execError: undefined, _outputPath: undefined },
+            deletable: true,
+            data: {
+                ...n.data,
+                _executing: undefined,
+                _execSuccess: undefined,
+                _execError: undefined,
+                _outputPath: undefined,
+                pythonInterpreter,
+                outputCallback,
+                interactionsCallback,
+                propagationCallback: applyNewPropagation,
+            },
         }));
-        const cleanEdges = replayEdges.map(({ _changed, ...e }: any) => e);
+        const cleanEdges = replayEdges.map(({ _changed, ...e }: any) => ({
+            ...e,
+        }));
         restoreGraph(cleanNodes, cleanEdges);
         setShowReplay(false);
-    }, [restoreGraph, workflowNameRef]);
+    }, [restoreGraph]);
 
     const [selectedEdgeId, setSelectedEdgeId] = useState<string>("");
 
@@ -336,13 +353,13 @@ export function MainCanvas() {
 
                     let allowedChanges: NodeChange[] = [];
 
-                    let edges = reactFlow.getEdges();
+                    let currentEdges = reactFlow.getEdges();
 
                     for (const change of changes) {
                         let allowed = true;
 
                         if (change.type == "remove") {
-                            for (const edge of edges) {
+                            for (const edge of currentEdges) {
                                 if (
                                     edge.source == change.id ||
                                     edge.target == change.id
@@ -439,6 +456,8 @@ export function MainCanvas() {
                 edgeTypes={edgeTypes}
                 isValidConnection={isValidConnection}
                 connectionMode={ConnectionMode.Loose}
+                nodesDeletable={true}
+                deleteKeyCode={['Delete', 'Backspace']}
                 minZoom={0.05}
                 fitView
             >

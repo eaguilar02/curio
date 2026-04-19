@@ -18,6 +18,7 @@ def register_logging_routes(bp, get_db_path):
 
         user_id       = body.get("user_id", 1)
         workflow_id   = body.get("workflow_id")
+        workflow_name = body.get("workflow_name")
         session_start = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
 
         db_path = get_db_path()
@@ -25,9 +26,9 @@ def register_logging_routes(bp, get_db_path):
             conn = sqlite3.connect(db_path)
             cur  = conn.cursor()
             cur.execute(
-                """INSERT INTO interaction_session (user_id, workflow_id, session_start)
-                   VALUES (?, ?, ?)""",
-                (user_id, workflow_id, session_start),
+                """INSERT INTO interaction_session (user_id, workflow_id, workflow_name, session_start)
+                   VALUES (?, ?, ?, ?)""",
+                (user_id, workflow_id, workflow_name, session_start),
             )
             session_id = cur.lastrowid
             conn.commit()
@@ -41,6 +42,7 @@ def register_logging_routes(bp, get_db_path):
             "session_id":    session_id,
             "user_id":       user_id,
             "workflow_id":   workflow_id,
+            "workflow_name": workflow_name,
             "session_start": session_start,
         }), 200
 
@@ -154,6 +156,7 @@ def register_logging_routes(bp, get_db_path):
                     s.session_id,
                     s.user_id,
                     s.workflow_id,
+                    s.workflow_name,
                     s.session_start,
                     s.session_end,
                     COUNT(e.event_id) AS event_count

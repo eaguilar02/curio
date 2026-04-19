@@ -6,6 +6,7 @@ import React, {
     useCallback,
     useRef,
     useEffect,
+    useMemo,
 } from "react";
 import {
     Connection,
@@ -31,6 +32,7 @@ import { useWorkflowOperations } from "../hook/useWorkflowOperations";
 import { EventInterceptor } from "../logging/EventInterceptor";
 import { SnapshotManager } from "logging/SnapshotManager";
 import { EventBuffer } from "logging/EventBuffer";
+import { nodeCodeRegistry } from "../hook/useBoxState";
 
 export interface IOutput {
     nodeId: string;
@@ -176,10 +178,28 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
         _setWorkflowName(data);
     };
 
-    const getGraphState = useCallback(() => ({
-        nodes: reactFlow.getNodes(),
-        edges: reactFlow.getEdges(),
-    }), [reactFlow]);
+    const getGraphState = useCallback(() => {
+        const rawNodes = reactFlow.getNodes();
+        console.debug('[getGraphState] raw nodes sample:', rawNodes.slice(0, 3).map(n => ({
+            id: n.id,
+            type: n.type,
+            'data.code': n.data.code,
+            'data.defaultCode': n.data.defaultCode,
+        })));
+        const nodes = rawNodes.map(node => ({
+            ...node,
+            data: {
+                ...node.data,
+                defaultCode: nodeCodeRegistry.get(node.id) ?? node.data.code ?? node.data.defaultCode,
+            },
+        }));
+        console.debug('[getGraphState] mapped nodes sample:', nodes.slice(0, 3).map(n => ({
+            id: n.id,
+            'data.defaultCode': n.data.defaultCode,
+            'registry': nodeCodeRegistry.get(n.id)?.slice(0, 60),
+        })));
+        return { nodes, edges: reactFlow.getEdges() };
+    }, [reactFlow]);
 
     const initializeProvenance = async () => {
         setLoading(true);
@@ -192,6 +212,8 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
     useEffect(() => {
         initializeProvenance();
     }, []);
+
+
 
     const setDashBoardMode = (value: boolean) => {
         if (value) {
@@ -285,6 +307,20 @@ const FlowProvider = ({ children }: { children: ReactNode }) => {
 
     const restoreGraph = useCallback(
         (nodes: Node[], edges: Edge[]) => {
+            nodes.forEach(node => {
+                const code = node.data?.defaultCode;
+                if (node.id && code) {
+                    nodeCodeRegistry.set(node.id, code);
+                } else if (node.id) {
+                    nodeCodeRegistry.delete(node.id);
+                }
+            });
+            console.debug('[restoreGraph] restoring nodes:', nodes.map(n => ({
+                id: n.id,
+                type: n.type,
+                'data.defaultCode': n.data.defaultCode,
+                'registry': nodeCodeRegistry.get(n.id)?.slice(0, 60),
+            })));
             setNodes(nodes);
             setEdges(edges);
             eventInterceptor.capture({
