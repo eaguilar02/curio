@@ -51,7 +51,7 @@ export default function GrammarEditor({
     //     _setCode(data);
     // };
 
-    const [grammar, _setGrammar] = useState("{}");
+    const [grammar, _setGrammar] = useState(defaultValue ?? "{}");
 
     const grammarRef = React.useRef(grammar);
     const setGrammar = (data: string) => {
