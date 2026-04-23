@@ -82,7 +82,7 @@ export const ReplayPage: React.FC<ReplayPageProps> = ({ onRestore }) => {
         alignItems: 'center',
         gap: '10px',
         padding: '9px 18px',
-        background: '#1e3a5f',
+        background: '#1E1F23',
         color: '#fff',
         flexShrink: 0,
         boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
@@ -124,7 +124,7 @@ export const ReplayPage: React.FC<ReplayPageProps> = ({ onRestore }) => {
           disabled={selectedId === null || engineState.loading}
           style={{
             padding: '5px 18px',
-            background: '#1a8f8a',
+            background: '#f59e0b',
             color: '#fff',
             border: 'none',
             borderRadius: '5px',

@@ -128,7 +128,7 @@ export const ReplayControls: React.FC<ReplayControlsProps> = ({ engine, engineSt
           disabled={dis || engine.atEnd}
           style={{
             ...btnBase(dis || engine.atEnd),
-            background: isPlaying ? '#dc2626' : '#1a8f8a',
+            background: isPlaying ? '#dc2626' : '#f59e0b',
             padding:    '5px 16px',
             fontWeight: 700,
             fontSize:   '13px',

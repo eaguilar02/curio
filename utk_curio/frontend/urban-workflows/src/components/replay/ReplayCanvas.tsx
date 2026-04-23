@@ -189,11 +189,11 @@ export const ReplayCanvas: React.FC<ReplayCanvasProps> = ({ engineState }) => {
         alignItems: 'center',
         gap:        '10px',
         padding:    '7px 14px',
-        background: '#1e3a5f',
+        background: '#1E1F23',
         flexShrink: 0,
       }}>
         <span style={{
-          background:   '#1a8f8a',
+          background:   '#f59e0b',
           color:        '#fff',
           fontWeight:   700,
           fontSize:     '11px',
