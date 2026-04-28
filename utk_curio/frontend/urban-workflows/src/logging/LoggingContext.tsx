@@ -11,9 +11,12 @@ import { EventInterceptor }  from './EventInterceptor';
 import { SnapshotManager, GraphState } from './SnapshotManager';
 import { LogEvent, LoggingContextValue } from './types';
 
+const API = 'http://localhost:5002';
+
 const LoggingContext = createContext<LoggingContextValue>({
   sessionId: null,
   capture:   () => undefined,
+  startNewSession: async () => {},
 });
 
 interface LoggingProviderProps {
@@ -131,8 +134,52 @@ export function LoggingProvider({
     EventInterceptor.getInstance().capture(event);
   };
 
+  const startNewSession = async (newName: string): Promise<void> => {
+    const buffer  = EventBuffer.getInstance();
+    const snapMgr = SnapshotManager.getInstance();
+
+    // Snapshot + close current session
+    snapMgr.takeSnapshot();
+    const sid = sessionIdRef.current;
+    if (sid !== null) {
+      await fetch(`${API}/api/log/session/end`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ session_id: sid, session_end: EventInterceptor.now() }),
+      }).catch(() => {});
+    }
+
+    // Reset snapshot event counter for the new session
+    snapMgr.reset();
+
+    // Start new session
+    const res  = await fetch(`${API}/api/log/session/start`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ user_id: userId, workflow_id: workflowId, workflow_name: newName }),
+    });
+    const data = await res.json();
+    const newSid: number = data.session_id;
+
+    setSessionId(newSid);
+    sessionIdRef.current = newSid;
+    buffer.setSessionIdGetter(() => newSid);
+    snapMgr.setSessionIdGetter(() => newSid);
+    snapMgr.setGraphStateGetter(getGraphState);
+
+    EventInterceptor.getInstance().capture({
+      event_type: 'SESSION_STARTED',
+      node_id:    null,
+      event_time: EventInterceptor.now(),
+      event_data: { userAgent: navigator.userAgent, workflowId: workflowId },
+    });
+
+    buffer.flush();
+    setTimeout(() => snapMgr.takeSnapshot(), 300);
+  };
+
   return (
-    <LoggingContext.Provider value={{ sessionId, capture }}>
+    <LoggingContext.Provider value={{ sessionId, capture, startNewSession }}>
       {children}
     </LoggingContext.Provider>
   );

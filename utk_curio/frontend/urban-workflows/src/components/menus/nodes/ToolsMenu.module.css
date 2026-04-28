@@ -1,6 +1,6 @@
 .containerStyle {
     position: fixed;
-    z-index: 100;
+    z-index: 1000;
     top: 150px;
     left: 50px;
     background-color: #1E1F23;

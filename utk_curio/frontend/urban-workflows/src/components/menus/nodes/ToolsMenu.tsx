@@ -27,21 +27,22 @@ function DraggableTool({ boxType, icon, tooltip, tutorialID}: { boxType: BoxType
     );
 }
 
-export default function ToolsMenu() {
+export default function ToolsMenu({ replayOpen = false }: { replayOpen?: boolean }) {
     const paletteTypes = getPaletteNodeTypes();
     return (
-        <div>
-            <div className={styles.containerStyle}>
-                {paletteTypes.map(desc => (
-                    <DraggableTool
-                        key={desc.id}
-                        boxType={desc.id}
-                        icon={desc.icon}
-                        tooltip={desc.label}
-                        tutorialID={desc.tutorialId}
-                    />
-                ))}
-            </div>
+        <div
+            className={styles.containerStyle}
+            style={{ opacity: replayOpen ? 0.4 : 1, pointerEvents: replayOpen ? 'none' : 'auto' }}
+        >
+            {paletteTypes.map(desc => (
+                <DraggableTool
+                    key={desc.id}
+                    boxType={desc.id}
+                    icon={desc.icon}
+                    tooltip={desc.label}
+                    tutorialID={desc.tutorialId}
+                />
+            ))}
         </div>
     );
 }

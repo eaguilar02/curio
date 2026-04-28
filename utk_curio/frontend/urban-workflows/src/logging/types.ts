@@ -97,4 +97,5 @@ export interface LogEventsBatchRequest {
 export interface LoggingContextValue {
   sessionId: number | null;
   capture: (event: LogEvent) => void;
+  startNewSession: (newName: string) => Promise<void>;
 }

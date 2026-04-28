@@ -31,9 +31,10 @@ interface ReplayControlsProps {
   engine:      ReplayEngine;
   engineState: ReplayEngineState;
   onRestore?:  (nodes: any[], edges: any[]) => void;
+  horizontal?: boolean;
 }
 
-export const ReplayControls: React.FC<ReplayControlsProps> = ({ engine, engineState, onRestore }) => {
+export const ReplayControls: React.FC<ReplayControlsProps> = ({ engine, engineState, onRestore, horizontal }) => {
   const { cursor, events, loaded, loading } = engineState;
   const [isPlaying, setIsPlaying] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -96,6 +97,113 @@ export const ReplayControls: React.FC<ReplayControlsProps> = ({ engine, engineSt
     lineHeight:   1,
   });
 
+  const playbackButtons = (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+      <button
+        onClick={() => { stopPlay(); engine.seekToStart(); }}
+        disabled={dis || engine.atStart}
+        style={btnBase(dis || engine.atStart)}
+        title="Skip to start (Home)"
+      >⏮</button>
+
+      <button
+        onClick={() => { stopPlay(); engine.stepBackward(); }}
+        disabled={dis || engine.atStart}
+        style={btnBase(dis || engine.atStart)}
+        title="Step backward (←)"
+      >◀</button>
+
+      <button
+        onClick={() => isPlaying ? stopPlay() : startPlay()}
+        disabled={dis || engine.atEnd}
+        style={{
+          ...btnBase(dis || engine.atEnd),
+          background: isPlaying ? '#dc2626' : '#f59e0b',
+          padding:    '5px 16px',
+          fontWeight: 700,
+          fontSize:   '13px',
+        }}
+        title="Play / Pause (Space)"
+      >
+        {isPlaying ? '⏸ Pause' : '▶ Play'}
+      </button>
+
+      <button
+        onClick={() => { stopPlay(); engine.stepForward(); }}
+        disabled={dis || engine.atEnd}
+        style={btnBase(dis || engine.atEnd)}
+        title="Step forward (→)"
+      >▶▶</button>
+
+      <button
+        onClick={() => { stopPlay(); engine.seekToEnd(); }}
+        disabled={dis || engine.atEnd}
+        style={btnBase(dis || engine.atEnd)}
+        title="Skip to end (End)"
+      >⏭</button>
+
+      <span style={{
+        marginLeft: horizontal ? '8px' : 'auto',
+        fontSize:   '12px',
+        fontWeight: 700,
+        color:      horizontal ? '#fff' : '#374151',
+        fontFamily: 'monospace',
+        minWidth:   '50px',
+        textAlign:  'right',
+      }}>
+        {cursor} / {total}
+      </span>
+    </div>
+  );
+
+  const seekSlider = (
+    <input
+      type="range"
+      min={0}
+      max={total || 1}
+      value={cursor}
+      disabled={dis}
+      onChange={e => { stopPlay(); engine.seekTo(parseInt(e.target.value, 10)); }}
+      style={{ width: horizontal ? '140px' : '100%', cursor: dis ? 'not-allowed' : 'pointer', accentColor: '#f59e0b' }}
+      title={`Seek to step (current: ${cursor})`}
+    />
+  );
+
+  const restoreBtn = (
+    <button
+      disabled={!loaded || engineState.currentGraph.nodes.length === 0}
+      style={{
+        padding:      horizontal ? '5px 14px' : '7px',
+        width:        horizontal ? 'auto' : '100%',
+        fontSize:     '12px',
+        fontWeight:   700,
+        borderRadius: '6px',
+        border:       'none',
+        cursor:       (!loaded || engineState.currentGraph.nodes.length === 0) ? 'not-allowed' : 'pointer',
+        opacity:      (!loaded || engineState.currentGraph.nodes.length === 0) ? 0.38 : 1,
+        background:   '#1e3a5f',
+        color:        '#fff',
+        whiteSpace:   'nowrap',
+      }}
+      onClick={() => {
+        if (!window.confirm(`Restore canvas to step ${cursor} of ${total}?\n\nThis will replace the current workflow.`)) return;
+        onRestore?.(engineState.currentGraph.nodes, engineState.currentGraph.edges);
+      }}
+    >
+      Restore to step {cursor}
+    </button>
+  );
+
+  if (horizontal) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        {playbackButtons}
+        {seekSlider}
+        {restoreBtn}
+      </div>
+    );
+  }
+
   return (
     <div style={{
       display:       'flex',
@@ -108,62 +216,7 @@ export const ReplayControls: React.FC<ReplayControlsProps> = ({ engine, engineSt
       fontFamily:    'Arial, sans-serif',
     }}>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-        <button
-          onClick={() => { stopPlay(); engine.seekToStart(); }}
-          disabled={dis || engine.atStart}
-          style={btnBase(dis || engine.atStart)}
-          title="Skip to start (Home)"
-        >⏮</button>
-
-        <button
-          onClick={() => { stopPlay(); engine.stepBackward(); }}
-          disabled={dis || engine.atStart}
-          style={btnBase(dis || engine.atStart)}
-          title="Step backward (←)"
-        >◀</button>
-
-        <button
-          onClick={() => isPlaying ? stopPlay() : startPlay()}
-          disabled={dis || engine.atEnd}
-          style={{
-            ...btnBase(dis || engine.atEnd),
-            background: isPlaying ? '#dc2626' : '#f59e0b',
-            padding:    '5px 16px',
-            fontWeight: 700,
-            fontSize:   '13px',
-          }}
-          title="Play / Pause (Space)"
-        >
-          {isPlaying ? '⏸ Pause' : '▶ Play'}
-        </button>
-
-        <button
-          onClick={() => { stopPlay(); engine.stepForward(); }}
-          disabled={dis || engine.atEnd}
-          style={btnBase(dis || engine.atEnd)}
-          title="Step forward (→)"
-        >▶▶</button>
-
-        <button
-          onClick={() => { stopPlay(); engine.seekToEnd(); }}
-          disabled={dis || engine.atEnd}
-          style={btnBase(dis || engine.atEnd)}
-          title="Skip to end (End)"
-        >⏭</button>
-
-        <span style={{
-          marginLeft: 'auto',
-          fontSize:   '12px',
-          fontWeight: 700,
-          color:      '#374151',
-          fontFamily: 'monospace',
-          minWidth:   '70px',
-          textAlign:  'right',
-        }}>
-          {cursor} / {total}
-        </span>
-      </div>
+      {playbackButtons}
 
       <input
         type="range"
@@ -315,27 +368,7 @@ export const ReplayControls: React.FC<ReplayControlsProps> = ({ engine, engineSt
         })}
       </div>
 
-      <button
-        disabled={!loaded || engineState.currentGraph.nodes.length === 0}
-        style={{
-          width:        '100%',
-          padding:      '7px',
-          fontSize:     '13px',
-          fontWeight:   700,
-          borderRadius: '6px',
-          border:       'none',
-          cursor:       (!loaded || engineState.currentGraph.nodes.length === 0) ? 'not-allowed' : 'pointer',
-          opacity:      (!loaded || engineState.currentGraph.nodes.length === 0) ? 0.38 : 1,
-          background:   '#1e3a5f',
-          color:        '#fff',
-        }}
-        onClick={() => {
-          if (!window.confirm(`Restore canvas to step ${cursor} of ${total}?\n\nThis will replace the current workflow.`)) return;
-          onRestore?.(engineState.currentGraph.nodes, engineState.currentGraph.edges);
-        }}
-      >
-        Restore to step {cursor}
-      </button>
+      {restoreBtn}
 
       {loading && (
         <div style={{ fontSize: '11px', color: '#1a8f8a', textAlign: 'center' }}>

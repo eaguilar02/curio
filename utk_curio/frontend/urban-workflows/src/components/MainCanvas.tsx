@@ -291,17 +291,32 @@ export function MainCanvas() {
         {showReplay && (
             <div style={{
                 position: "fixed",
-                inset:    0,
-                zIndex:   9999,
-                background: "#f4f6f8",
+                top:      "65px",
+                left:     0,
+                right:    0,
+                bottom:   0,
+                zIndex:   1002,
+                background: "rgba(0, 0, 0, 0.51)",
+                pointerEvents: "all",
+            }} />
+        )}
+        {showReplay && (
+            <div style={{
+                position: "fixed",
+                top:      "65px",
+                left:     0,
+                right:    0,
+                bottom:   0,
+                zIndex:   1003,
+                background: "none",
             }}>
                 <button
                     onClick={() => setShowReplay(false)}
                     style={{
                         position:     "fixed",
-                        top:          9,
+                        top:          60,
                         right:        16,
-                        zIndex:       10000,
+                        zIndex:       9999,
                         background:   "#dc2626",
                         color:        "#fff",
                         border:       "none",
@@ -460,11 +475,11 @@ export function MainCanvas() {
                 deleteKeyCode={['Delete', 'Backspace']}
                 minZoom={0.05}
                 fitView
+                attributionPosition="bottom-right"
             >
                 {AIModeRef.current ? <WorkflowGoal /> : null}
                 <UserMenu />
                 {AIModeRef.current ? <LLMChat /> : null}
-                <ToolsMenu />
                 <UpMenu 
                     setDashBoardMode={(value) => handleDashboardToggle(value)}
                     setDashboardOn={handleDashboardToggle}
@@ -472,6 +487,7 @@ export function MainCanvas() {
                     fileMenuOpen={fileMenuOpen}
                     setFileMenuOpen={setFileMenuOpen}
                     setAIMode={setAIMode}
+                    replayOpen={showReplay}
                 />
                 <RightClickMenu
                     showMenu={showMenu}
@@ -483,33 +499,8 @@ export function MainCanvas() {
                         },
                     ]}
                 />
-                <Background />
-                <Controls />
-
-                <button
-                    onClick={() => setShowReplay(true)}
-                    title="Open session replay"
-                    style={{
-                        position:     "absolute",
-                        bottom:       "10px",
-                        left:         "64px",
-                        zIndex:       10,
-                        padding:      "6px 14px",
-                        background:   "#1e3a5f",
-                        color:        "#fff",
-                        border:       "none",
-                        borderRadius: "6px",
-                        cursor:       "pointer",
-                        fontSize:     "16px",
-                        fontWeight:   700,
-                        display:      "flex",
-                        alignItems:   "center",
-                        gap:          "5px",
-                        boxShadow:    "0 1px 4px rgba(0,0,0,0.25)",
-                    }}
-                >
-                    🎞  Replay
-                </button>
+                <Background style={{ zIndex: -1 }} />
+                <Controls style={{ bottom: '60px' }} />
 
                 { isComponentsSelected ? (
                     <button
@@ -552,6 +543,33 @@ export function MainCanvas() {
                     </button>
                 ) : null}
             </ReactFlow>
+            <button
+                onClick={() => setShowReplay(true)}
+                title="Open session replay"
+                style={{
+                    position:     "fixed",
+                    bottom:       "30px",
+                    left:         "15px",
+                    zIndex:       999,
+                    padding:      "6px 14px",
+                    background:   "#1e3a5f",
+                    color:        "#fff",
+                    border:       "none",
+                    borderRadius: "6px",
+                    cursor:       "pointer",
+                    fontSize:     "16px",
+                    fontWeight:   700,
+                    display:      "flex",
+                    alignItems:   "center",
+                    gap:          "5px",
+                    boxShadow:    "0 1px 4px rgba(0, 0, 0, 0.48)",
+                    opacity:      showReplay ? 0.4 : 1,
+                    pointerEvents: showReplay ? "none" : "auto",
+                }}
+            >
+                🎞  Replay
+            </button>
+            <ToolsMenu replayOpen={showReplay} />
             <input hidden type="file" name="file" id="file" />
 
         </div> : loadingAnimation() }     

@@ -1,13 +1,12 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import ReactFlow, {
   Background,
-  Controls,
-  MiniMap,
   Node,
   Edge,
   MarkerType,
   BackgroundVariant,
   useReactFlow,
+  NodeProps,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 
@@ -16,76 +15,45 @@ import {
   ReplayNode,
   ReplayEdge,
 } from '../../replay/ReplayTypes';
+import { getAllNodeTypes } from '../../registry';
+import UniversalBox from '../UniversalBox';
 
-const CHANGED_BORDER  = '#f59e0b';
-const CHANGED_BG      = '#fefce8';
-const CHANGED_SHADOW  = 'rgba(245, 158, 11, 0.35)';
-const NORMAL_BORDER   = '#94a3b8';
-const NORMAL_BG       = '#ffffff';
-const DIMMED_BORDER   = '#cbd5e1';
-const DIMMED_BG       = '#f8fafc';
+const CHANGED_BORDER = '#f59e0b';
+const NORMAL_BORDER  = '#94a3b8';
+const DIMMED_BORDER  = '#cbd5e1';
+
+const NO_OP = () => {};
+
+function ReplayNodeWrapper(props: NodeProps) {
+  const dimmed = props.data?._dimmed === true;
+  return (
+    <div style={{ position: 'relative', opacity: dimmed ? 0.45 : 1, transition: 'opacity 0.2s' }}>
+      <UniversalBox {...props} isConnectable={false} />
+      {/* Transparent overlay blocks all clicks so replay stays read-only */}
+      <div style={{ position: 'absolute', inset: 0, zIndex: 10, cursor: 'default' }} />
+    </div>
+  );
+}
 
 function toRFNode(rn: ReplayNode): Node {
-  const changed = rn._changed === true;
-  const dimmed  = rn._dimmed  === true;
-  const displayId = rn.id.length > 18 ? rn.id.slice(0, 18) + '…' : rn.id;
-  const nodeType  = rn.type ?? 'node';
-
   return {
     id:       rn.id,
-    type:     'default',
+    type:     rn.type ?? 'default',
     position: rn.position,
     data: {
-      label: (
-        <div style={{ padding: '2px 0', textAlign: 'center' }}>
-          <div style={{
-            fontSize:     '9px',
-            color:        changed ? '#92400e' : '#64748b',
-            fontFamily:   'monospace',
-            marginBottom: '3px',
-            letterSpacing: '0.3px',
-          }}>
-            {nodeType.replace(/_/g, ' ')}
-          </div>
-          <div style={{
-            fontSize:   '11px',
-            fontWeight: 600,
-            color:      changed ? '#78350f' : '#374151',
-            fontFamily: 'monospace',
-          }}>
-            {displayId}
-          </div>
-          {rn.data._executing && (
-            <div style={{ fontSize: '9px', color: '#7c3aed', marginTop: '2px' }}>
-              ⟳ running
-            </div>
-          )}
-          {rn.data._execSuccess === false && (
-            <div style={{ fontSize: '9px', color: '#dc2626', marginTop: '2px' }}>
-              ✕ failed
-            </div>
-          )}
-          {rn.data._execSuccess === true && (
-            <div style={{ fontSize: '9px', color: '#16a34a', marginTop: '2px' }}>
-              ✓ done
-            </div>
-          )}
-        </div>
-      ),
+      ...rn.data,
+      nodeId:               rn.data.nodeId ?? rn.id,
+      nodeType:             rn.type ?? rn.data.nodeType,
+      outputCallback:       NO_OP,
+      propagationCallback:  NO_OP,
+      interactionsCallback: NO_OP,
+      _changed:             rn._changed,
+      _dimmed:              rn._dimmed,
     },
     draggable:   false,
     selectable:  true,
     connectable: false,
-    style: {
-      border:       changed ? `2.5px solid ${CHANGED_BORDER}` : `1px solid ${dimmed ? DIMMED_BORDER : NORMAL_BORDER}`,
-      borderRadius: '8px',
-      background:   changed ? CHANGED_BG : dimmed ? DIMMED_BG : NORMAL_BG,
-      opacity:      dimmed ? 0.42 : 1,
-      boxShadow:    changed ? `0 0 0 3px ${CHANGED_SHADOW}` : '0 1px 3px rgba(0,0,0,0.08)',
-      transition:   'all 0.2s ease',
-      minWidth:     '130px',
-      cursor:       'default',
-    },
+    style: { background: 'transparent', border: 'none', padding: 0 },
   };
 }
 
@@ -141,18 +109,20 @@ export const ReplayCanvas: React.FC<ReplayCanvasProps> = ({ engineState }) => {
   } = engineState;
 
   const { fitView } = useReactFlow();
-  const prevNodeCount = useRef(0);
-
-  // Fit all nodes into view whenever a node is added
-  useEffect(() => {
-    const count = currentGraph.nodes.length;
-    if (count > prevNodeCount.current) {
-      const id = setTimeout(() => fitView({ padding: 0.25, duration: 400 }), 50);
-      prevNodeCount.current = count;
-      return () => clearTimeout(id);
+  const nodeTypes = useMemo(() => {
+    const types: Record<string, any> = {};
+    for (const desc of getAllNodeTypes()) {
+      types[desc.id] = ReplayNodeWrapper;
     }
-    prevNodeCount.current = count;
-  }, [currentGraph.nodes.length, fitView]);
+    return types;
+  }, []);
+
+  // Refit view on every step so all nodes stay in frame
+  useEffect(() => {
+    if (currentGraph.nodes.length === 0) return;
+    const id = setTimeout(() => fitView({ padding: 0.25, duration: 300 }), 50);
+    return () => clearTimeout(id);
+  }, [cursor, currentGraph.nodes.length, fitView]);
 
   const rfNodes: Node[] = useMemo(
     () => currentGraph.nodes.map(toRFNode),
@@ -179,10 +149,7 @@ export const ReplayCanvas: React.FC<ReplayCanvasProps> = ({ engineState }) => {
       flexDirection: 'column',
       width:         '100%',
       height:        '100%',
-      border:        '1.5px solid #e2e8f0',
-      borderRadius:  '10px',
       overflow:      'hidden',
-      background:    '#f8fafc',
     }}>
       <div style={{
         display:    'flex',
@@ -204,12 +171,12 @@ export const ReplayCanvas: React.FC<ReplayCanvasProps> = ({ engineState }) => {
           REPLAY
         </span>
         <span style={{ color: '#94a3b8', fontSize: '12px' }}>
-          Read-only — interactions disabled
+        Preview Mode — Interactions Disabled
         </span>
         {loaded && (
           <span style={{
-            marginLeft: 'auto',
-            color:      '#64748b',
+            marginLeft: '16px',
+            color:      '#94a3b8',
             fontSize:   '11px',
             fontFamily: 'monospace',
           }}>
@@ -255,17 +222,40 @@ export const ReplayCanvas: React.FC<ReplayCanvasProps> = ({ engineState }) => {
           <div style={{
             position:   'absolute', inset: 0,
             display:    'flex', alignItems: 'center', justifyContent: 'center',
-            background: 'rgba(248,250,252,0.6)',
+            background: 'rgba(2, 2, 2, 0.67)',
             zIndex:     5,
             color:      '#94a3b8',
             fontSize:   '14px',
             pointerEvents: 'none',
           }}>
-            Press ▶ Play or → to start replay
+            Press ▶ Play or → To Start Replay Preview 
           </div>
         )}
 
+        {/* Persistent read-only watermark */}
+        <div style={{
+          position:      'absolute',
+          top:           12,
+          right:         12,
+          zIndex:        20,
+          pointerEvents: 'none',
+          display:       'flex',
+          alignItems:    'center',
+          gap:           '6px',
+          background:    'rgba(245,158,11,0.15)',
+          border:        '1px solid rgba(245,158,11,0.4)',
+          borderRadius:  '6px',
+          padding:       '4px 10px',
+          backdropFilter:'blur(4px)',
+        }}>
+          <span style={{ fontSize: '10px', color: '#f59e0b' }}>●</span>
+          <span style={{ fontSize: '11px', fontWeight: 700, color: '#f59e0b', letterSpacing: '0.5px' }}>
+            REPLAY — READ ONLY
+          </span>
+        </div>
+
         <ReactFlow
+          nodeTypes={nodeTypes}
           nodes={rfNodes}
           edges={rfEdges}
           nodesDraggable={false}
@@ -284,16 +274,6 @@ export const ReplayCanvas: React.FC<ReplayCanvasProps> = ({ engineState }) => {
             gap={20}
             size={1}
           />
-          <Controls showInteractive={false} />
-          <MiniMap
-            nodeColor={(node) => {
-              const rn = currentGraph.nodes.find(n => n.id === node.id);
-              if (rn?._changed) return CHANGED_BORDER;
-              if (rn?._dimmed)  return DIMMED_BORDER;
-              return NORMAL_BORDER;
-            }}
-            style={{ background: '#f1f5f9', border: '1px solid #e2e8f0' }}
-          />
         </ReactFlow>
       </div>
 
@@ -301,7 +281,7 @@ export const ReplayCanvas: React.FC<ReplayCanvasProps> = ({ engineState }) => {
         display:      'flex',
         alignItems:   'center',
         gap:          '10px',
-        padding:      '5px 14px',
+        padding:      '5px 14px 5px 60px',
         background:   '#f1f5f9',
         borderTop:    '1px solid #e2e8f0',
         flexShrink:   0,
@@ -310,7 +290,7 @@ export const ReplayCanvas: React.FC<ReplayCanvasProps> = ({ engineState }) => {
         color:        '#64748b',
         minHeight:    '28px',
       }}>
-        <span style={{ fontWeight: 700, color: '#374151' }}>{stepLabel}</span>
+        <span style={{fontWeight: 700, color: '#374151', marginLeft: '0' }}>{stepLabel}</span>
         <span style={{
           background:   lastAppliedEvent ? '#fefce8' : 'transparent',
           border:       lastAppliedEvent ? '1px solid #f59e0b' : 'none',

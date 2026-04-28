@@ -129,7 +129,7 @@ def register_logging_routes(bp, get_db_path):
         limit       = request.args.get("limit",  50,  type=int)
         offset      = request.args.get("offset", 0,   type=int)
 
-        where_clauses = []
+        where_clauses = ["(s.archived IS NULL OR s.archived = 0)"]
         params = []
         if workflow_id is not None:
             where_clauses.append("s.workflow_id = ?")
@@ -138,7 +138,7 @@ def register_logging_routes(bp, get_db_path):
             where_clauses.append("s.user_id = ?")
             params.append(user_id)
 
-        where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+        where_sql = "WHERE " + " AND ".join(where_clauses)
 
         db_path = get_db_path()
         try:
@@ -361,6 +361,35 @@ def register_logging_routes(bp, get_db_path):
             "session_id":  session_id,
             "session_end": session_end,
         }), 200
+
+
+    # =========================================================================
+    # POST /api/log/sessions/archive-by-name
+    # =========================================================================
+    @bp.route("/api/log/sessions/archive-by-name", methods=["POST"])
+    def archive_sessions_by_name():
+        body          = request.get_json(silent=True) or {}
+        workflow_name = body.get("workflow_name")
+
+        if not workflow_name:
+            return jsonify({"error": "Missing workflow_name"}), 400
+
+        db_path = get_db_path()
+        try:
+            conn   = sqlite3.connect(db_path)
+            cursor = conn.execute(
+                "UPDATE interaction_session SET archived = 1 WHERE workflow_name = ?",
+                (workflow_name,),
+            )
+            archived_count = cursor.rowcount
+            conn.commit()
+            conn.close()
+        except sqlite3.Error as e:
+            logger.error("archive_sessions_by_name DB error: %s", e)
+            return jsonify({"error": "Database error", "detail": str(e)}), 500
+
+        logger.debug("archive_sessions_by_name: archived %d sessions for name=%s", archived_count, workflow_name)
+        return jsonify({"archived": archived_count, "workflow_name": workflow_name}), 200
 
 
     # =========================================================================

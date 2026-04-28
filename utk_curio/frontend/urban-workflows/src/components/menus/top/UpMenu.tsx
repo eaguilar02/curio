@@ -3,6 +3,9 @@ import CSS from "csstype";
 import { FileUpload, TrillProvenanceWindow, DatasetsWindow, Expand } from "components/menus";
 import { useFlowContext } from "../../../providers/FlowProvider";
 import { useCode } from "../../../hook/useCode";
+import { useLogging } from "../../../logging/LoggingContext";
+
+const API = 'http://localhost:5002';
 import { TrillGenerator } from "../../../TrillGenerator";
 import styles from "./UpMenu.module.css";
 import clsx from 'clsx';
@@ -18,7 +21,8 @@ export default function UpMenu({
     dashboardOn,
     fileMenuOpen,
     setFileMenuOpen,
-    setAIMode
+    setAIMode,
+    replayOpen = false,
 }: {
     setDashBoardMode: (mode: boolean) => void;
     setDashboardOn: (mode: boolean) => void;
@@ -26,15 +30,20 @@ export default function UpMenu({
     fileMenuOpen: boolean;
     setAIMode: (value: boolean) => void;
     setFileMenuOpen: (open: boolean) => void;
+    replayOpen?: boolean;
 }) {
     const [isEditing, setIsEditing] = useState(false);
     const [trillProvenanceOpen, setTrillProvenanceOpen] = useState(false);
     const [tutorialOpen, setTutorialOpen] = useState(false);
     const [datasetsOpen, setDatasetsOpen] = useState(false);
+    const [saveAsOpen, setSaveAsOpen] = useState(false);
+    const [saveAsName, setSaveAsName] = useState('');
+    const [saveAsConflict, setSaveAsConflict] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     const { nodes, edges, workflowNameRef, setWorkflowName } = useFlowContext();
     const { loadTrill } = useCode();
+    const { startNewSession } = useLogging();
 
     const fileButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -78,6 +87,49 @@ export default function UpMenu({
     }
 
     //James new defintions end
+
+    const openSaveAs = () => {
+        setSaveAsName(workflowNameRef.current);
+        setSaveAsConflict(false);
+        setSaveAsOpen(true);
+        setFileMenuOpen(false);
+    };
+
+    const confirmSaveAs = async (override: boolean) => {
+        const name = saveAsName.trim();
+        if (!name) return;
+
+        if (override) {
+            await fetch(`${API}/api/log/sessions/archive-by-name`, {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body:    JSON.stringify({ workflow_name: name }),
+            }).catch(() => {});
+        }
+
+        setWorkflowName(name);
+        await startNewSession(name);
+        setSaveAsOpen(false);
+        setSaveAsConflict(false);
+    };
+
+    const handleSaveAsSubmit = async () => {
+        const name = saveAsName.trim();
+        if (!name) return;
+
+        // Check if name already exists
+        const res  = await fetch(`${API}/api/log/sessions?limit=200`).catch(() => null);
+        const data = res ? await res.json() : { sessions: [] };
+        const exists = (data.sessions ?? []).some(
+            (s: any) => s.workflow_name === name
+        );
+
+        if (exists) {
+            setSaveAsConflict(true);
+        } else {
+            confirmSaveAs(false);
+        }
+    };
 
     const exportTrill = (e:any) => {
         let trill_spec = TrillGenerator.generateTrill(nodes, edges, workflowNameRef.current);
@@ -231,7 +283,7 @@ export default function UpMenu({
                         className={styles.button}
                         onClick={(e) => {
                                 e.stopPropagation();
-                                setFileMenuOpen((prev) => !prev);
+                                setFileMenuOpen(!fileMenuOpen);
                             }
                         }
                     >
@@ -247,6 +299,10 @@ export default function UpMenu({
                             <div className={styles.dropDownRow} onClick={exportTrill}>
                                 <FontAwesomeIcon className={styles.dropDownIcon} icon={faFileExport} />
                                 <button className={styles.noStyleButton}>Save specification</button>
+                            </div>
+                            <div className={styles.dropDownRow} onClick={openSaveAs}>
+                                <FontAwesomeIcon className={styles.dropDownIcon} icon={faFileExport} />
+                                <button className={styles.noStyleButton}>Save As...</button>
                             </div>
                         </div>
                     )}
@@ -273,7 +329,7 @@ export default function UpMenu({
                 <button className={styles.button} onClick={openDatasetsModal}><FontAwesomeIcon icon={faDatabase} /></button>
             </div>
             {/* Editable Workflow Name */}
-            <div className={styles.workflowNameContainer}>
+            <div className={styles.workflowNameContainer} style={{ top: replayOpen ? '90px' : undefined }}>
                 {isEditing ? (
                     <input
                         type="text"
@@ -300,10 +356,73 @@ export default function UpMenu({
                 workflowName={workflowNameRef.current}
             />
             {/* Datasets Modal */}
-            <DatasetsWindow 
+            <DatasetsWindow
                 open={datasetsOpen}
                 closeModal={closeDatasetsModal}
             />
+
+            {/* Save As Dialog */}
+            {saveAsOpen && (
+                <div style={{
+                    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999,
+                }}>
+                    <div style={{
+                        background: '#fff', borderRadius: 10, padding: '28px 32px',
+                        minWidth: 340, boxShadow: '0 4px 24px rgba(0,0,0,0.18)',
+                        display: 'flex', flexDirection: 'column', gap: 16,
+                    }}>
+                        {!saveAsConflict ? (
+                            <>
+                                <h3 style={{ margin: 0, fontSize: 16, color: '#1e3a5f' }}>Save As...</h3>
+                                <input
+                                    autoFocus
+                                    value={saveAsName}
+                                    onChange={e => setSaveAsName(e.target.value)}
+                                    onKeyDown={e => e.key === 'Enter' && handleSaveAsSubmit()}
+                                    placeholder="Session name"
+                                    style={{
+                                        padding: '8px 12px', borderRadius: 6, fontSize: 14,
+                                        border: '1.5px solid #cbd5e1', outline: 'none',
+                                    }}
+                                />
+                                <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                                    <button onClick={() => setSaveAsOpen(false)}
+                                        style={{ padding: '6px 18px', borderRadius: 6, border: '1px solid #cbd5e1', background: '#f8fafc', cursor: 'pointer' }}>
+                                        Cancel
+                                    </button>
+                                    <button onClick={handleSaveAsSubmit}
+                                        style={{ padding: '6px 18px', borderRadius: 6, border: 'none', background: '#1e3a5f', color: '#fff', cursor: 'pointer', fontWeight: 700 }}>
+                                        Save
+                                    </button>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <h3 style={{ margin: 0, fontSize: 16, color: '#1e3a5f' }}>Session already exists</h3>
+                                <p style={{ margin: 0, fontSize: 14, color: '#475569' }}>
+                                    A session named <strong>"{saveAsName}"</strong> already exists.<br />
+                                    Do you want to override it or keep both?
+                                </p>
+                                <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                                    <button onClick={() => setSaveAsOpen(false)}
+                                        style={{ padding: '6px 18px', borderRadius: 6, border: '1px solid #cbd5e1', background: '#f8fafc', cursor: 'pointer' }}>
+                                        Cancel
+                                    </button>
+                                    <button onClick={() => confirmSaveAs(false)}
+                                        style={{ padding: '6px 18px', borderRadius: 6, border: '1px solid #1e3a5f', background: '#fff', color: '#1e3a5f', cursor: 'pointer', fontWeight: 700 }}>
+                                        Keep Both
+                                    </button>
+                                    <button onClick={() => confirmSaveAs(true)}
+                                        style={{ padding: '6px 18px', borderRadius: 6, border: 'none', background: '#dc2626', color: '#fff', cursor: 'pointer', fontWeight: 700 }}>
+                                        Override
+                                    </button>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </div>
+            )}
         </>
 
     );

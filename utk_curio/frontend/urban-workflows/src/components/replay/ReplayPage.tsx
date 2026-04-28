@@ -73,21 +73,23 @@ export const ReplayPage: React.FC<ReplayPageProps> = ({ onRestore }) => {
     <div style={{
       display: 'flex',
       flexDirection: 'column',
-      height: '100vh',
+      height: '100%',
       fontFamily: 'Arial, sans-serif',
-      background: '#f4f6f8',
     }}>
+      {/* Footer toolbar: session selector + playback controls */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
         gap: '10px',
-        padding: '9px 18px',
+        padding: '8px 14px',
         background: '#1E1F23',
         color: '#fff',
         flexShrink: 0,
-        boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+        flexWrap: 'wrap',
+        boxShadow: '0 -1px 3px rgba(0,0,0,0.2)',
+        order: 1,
       }}>
-        <span style={{ fontSize: '15px', fontWeight: 700 }}>🎞 Session Replay</span>
+        <span style={{ fontSize: '14px', fontWeight: 700, whiteSpace: 'nowrap' }}>🎞 Replay</span>
 
         {sessionsErr ? (
           <span style={{ color: '#fca5a5', fontSize: '12px' }}>{sessionsErr}</span>
@@ -96,11 +98,11 @@ export const ReplayPage: React.FC<ReplayPageProps> = ({ onRestore }) => {
             value={selectedId ?? ''}
             onChange={e => setSelectedId(e.target.value ? parseInt(e.target.value, 10) : null)}
             style={{
-              padding: '4px 10px',
+              padding: '4px 8px',
               borderRadius: '5px',
               border: 'none',
-              fontSize: '12px',
-              minWidth: '320px',
+              fontSize: '11px',
+              minWidth: '200px',
               background: '#fff',
               color: '#1e3a5f',
               fontFamily: 'monospace',
@@ -123,7 +125,7 @@ export const ReplayPage: React.FC<ReplayPageProps> = ({ onRestore }) => {
           onClick={handleLoad}
           disabled={selectedId === null || engineState.loading}
           style={{
-            padding: '5px 18px',
+            padding: '4px 14px',
             background: '#f59e0b',
             color: '#fff',
             border: 'none',
@@ -132,47 +134,27 @@ export const ReplayPage: React.FC<ReplayPageProps> = ({ onRestore }) => {
             opacity: selectedId === null ? 0.5 : 1,
             fontWeight: 700,
             fontSize: '12px',
+            whiteSpace: 'nowrap',
           }}
         >
           {engineState.loading ? 'Loading…' : 'Load'}
         </button>
 
-        {engineState.loaded && (
-          <span style={{ color: '#94a3b8', fontSize: '11px', fontFamily: 'monospace' }}>
-            {engineState.events.length} events ·{' '}
-            {engineState.snapshots.length} snapshots ·{' '}
-            cursor {engineState.cursor}
-          </span>
-        )}
+        <span style={{ width: '1px', height: '22px', background: '#374151', flexShrink: 0 }} />
 
-        <span style={{ marginLeft: 'auto', color: '#64748b', fontSize: '11px' }}>
-          
-        </span>
+        <ReplayControls
+          engine={engine}
+          engineState={engineState}
+          onRestore={onRestore}
+          horizontal
+        />
       </div>
 
-      <div style={{
-        display: 'flex',
-        flex: 1,
-        gap: '12px',
-        padding: '12px',
-        minHeight: 0,
-        overflow: 'hidden',
-      }}>
-        <div style={{ flex: 1, minHeight: 0, minWidth: 0 }}>
-          <ReactFlowProvider>
-            <ReplayCanvas engineState={engineState} />
-          </ReactFlowProvider>
-        </div>
-
-        <div style={{
-          width: '300px',
-          flexShrink: 0,
-          overflowY: 'auto',
-          display: 'flex',
-          flexDirection: 'column',
-        }}>
-          <ReplayControls engine={engine} engineState={engineState} onRestore={onRestore} />
-        </div>
+      {}
+      <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', order: 0 }}>
+        <ReactFlowProvider>
+          <ReplayCanvas engineState={engineState} />
+        </ReactFlowProvider>
       </div>
     </div>
   );

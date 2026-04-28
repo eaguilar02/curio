@@ -14,7 +14,6 @@ export enum BoxType {
   DATA_POOL = "DATA_POOL",
   MERGE_FLOW = "MERGE_FLOW",
   COMMENTS = "COMMENTS",
-  TIME_MACHINE = "TIME_MACHINE",
 }
 
 export enum EdgeType {

@@ -1,6 +1,5 @@
 import { BoxType, SupportedType } from '../constants';
 import { Position } from 'reactflow';
-import { useTimeMachineLifecycle } from './timeMachineLifecycle';
 
 import {
   faMagnifyingGlassChart,
@@ -18,7 +17,6 @@ import {
   faCube,
   faChartLine,
   faCopy,
-  faClock,
 } from '@fortawesome/free-solid-svg-icons';
 
 import { registerNode } from './nodeRegistry';
@@ -457,25 +455,3 @@ registerNode({
   },
 });
 
-registerNode({
-  id: BoxType.TIME_MACHINE,
-  category: 'flow',
-  label: 'Time Machine',
-  icon: faClock,
-  inputPorts: [],
-  outputPorts: [],
-  editor: 'none',
-  inPalette: true,
-  paletteOrder: 10,
-  description: 'A special table that allows users to go back in time and see previous versions of the workflow.',
-  hasCode: false,
-  hasWidgets: false,
-  hasGrammar: false,
-  adapter: {
-    handles: [],
-    editor: { code: false, grammar: false, widgets: false, provenance: false },
-    container: { disablePlay: true },
-    showTemplateModal: false,
-    useLifecycle: useTimeMachineLifecycle,
-  },
-});

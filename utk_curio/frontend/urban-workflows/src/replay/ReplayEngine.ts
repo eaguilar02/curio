@@ -291,7 +291,42 @@ export class ReplayEngine {
       }
     }
 
-    return { nodes, edges };
+    return { nodes: ReplayEngine.avoidOverlaps(nodes), edges };
+  }
+
+  private static readonly NODE_W = 290;
+  private static readonly NODE_H = 150;
+  private static readonly PADDING = 24;
+
+  public static avoidOverlaps(nodes: ReplayNode[]): ReplayNode[] {
+    if (nodes.length < 2) return nodes;
+    const result = nodes.map(n => ({ ...n, position: { ...n.position } }));
+    const W = ReplayEngine.NODE_W + ReplayEngine.PADDING;
+    const H = ReplayEngine.NODE_H + ReplayEngine.PADDING;
+
+    for (let iter = 0; iter < 10; iter++) {
+      let moved = false;
+      for (let i = 0; i < result.length; i++) {
+        for (let j = i + 1; j < result.length; j++) {
+          const a = result[i].position;
+          const b = result[j].position;
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          const overlapX = W - Math.abs(dx);
+          const overlapY = H - Math.abs(dy);
+          if (overlapX > 0 && overlapY > 0) {
+            const shift = overlapX < overlapY
+              ? { x: (overlapX / 2 + 1) * Math.sign(dx || 1), y: 0 }
+              : { x: 0, y: (overlapY / 2 + 1) * Math.sign(dy || 1) };
+            result[i].position = { x: a.x - shift.x, y: a.y - shift.y };
+            result[j].position = { x: b.x + shift.x, y: b.y + shift.y };
+            moved = true;
+          }
+        }
+      }
+      if (!moved) break;
+    }
+    return result;
   }
 
   public static applyHighlights(

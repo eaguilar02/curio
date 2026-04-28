@@ -13,10 +13,7 @@ const TrillProvenanceWindow: React.FC = () => {
       border: '1px solid #e2e8f0',
       borderRadius: '6px'
     }}>
-      <strong>Provenance Window</strong>
-      <p style={{ marginTop: '8px' }}>
-        Disabled due to reagraph crash.
-      </p>
+
     </div>
   );
 };

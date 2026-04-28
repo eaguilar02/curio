@@ -1,3 +1,9 @@
+.react-flow__attribution {
+    left: auto !important;
+    right: 8px !important;
+    bottom: 8px !important;
+}
+
 path.react-flow__edge-path {
     stroke-width: 3;
 }

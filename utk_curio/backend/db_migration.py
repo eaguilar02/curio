@@ -41,5 +41,11 @@ def run_migration(db_path: str) -> None:
     );
     """)
 
+    # Add archived column if it doesn't exist yet
+    try:
+        cursor.execute("ALTER TABLE interaction_session ADD COLUMN archived INTEGER DEFAULT 0")
+    except Exception:
+        pass  # column already exists
+
     conn.commit()
     conn.close()
