@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactFlow, {
   Controls,
   Node,
@@ -11,6 +11,9 @@ import 'reactflow/dist/style.css';
 
 import { getAllNodeTypes } from '../../registry';
 import UniversalBox from '../UniversalBox';
+import BiDirectionalEdge from '../edges/BiDirectionalEdge';
+import UniDirectionalEdge from '../edges/UniDirectionalEdge';
+import { EdgeType } from '../../constants';
 import {
   ReplayEngineState,
   ReplayNode,
@@ -58,14 +61,6 @@ function ReplayNodeWrapper(props: NodeProps) {
       }}
     >
       <UniversalBox {...props} isConnectable={false} />
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          zIndex: 50,
-          cursor: 'default',
-        }}
-      />
     </div>
   );
 }
@@ -81,6 +76,11 @@ function buildNodeTypes() {
 }
 
 const REPLAY_NODE_TYPES = buildNodeTypes();
+
+const REPLAY_EDGE_TYPES = {
+  [EdgeType.BIDIRECTIONAL_EDGE]: BiDirectionalEdge,
+  [EdgeType.UNIDIRECTIONAL_EDGE]: UniDirectionalEdge,
+};
 
 export interface ReplayCallbacks {
   outputCallback: (...args: any[]) => void;
@@ -113,7 +113,7 @@ function toRFNode(rn: ReplayNode, cbacks: ReplayCallbacks): Node {
       _dimmed: rn._dimmed,
     },
     draggable: false,
-    selectable: false,
+    selectable: true,
     connectable: false,
     style: {
       background: 'transparent',
@@ -132,7 +132,7 @@ function toRFEdge(re: ReplayEdge): Edge {
     target: re.target,
     sourceHandle: re.sourceHandle ?? undefined,
     targetHandle: re.targetHandle ?? undefined,
-    type: 'default',
+    type: re.type ?? 'default',
     animated: changed,
     markerEnd: {
       type: MarkerType.ArrowClosed,
@@ -195,10 +195,29 @@ export const ReplayCanvas: React.FC<ReplayCanvasProps> = ({
     callbacksRef.current = replayCallbacks;
   }, [replayCallbacks]);
 
-  const rfNodes = useMemo(
-    () => currentGraph.nodes.map(n => toRFNode(n, callbacksRef.current)),
-    [currentGraph.nodes]
-  );
+  // Ref holds current preview edges so the output callback can read them without stale closures.
+  const replayEdgesRef = useRef(currentGraph.edges);
+
+  // Local node state so preview executions can push outputs to downstream nodes.
+  const [localNodes, setLocalNodes] = useState<Node[]>([]);
+
+  // When a node produces output, find downstream nodes via preview edges and update them directly.
+  const replayOutputCallback = useCallback((nodeId: string, output: string) => {
+    const affected = replayEdgesRef.current
+      .filter(e => e.source === nodeId && !(e.sourceHandle === 'in/out' && e.targetHandle === 'in/out'))
+      .map(e => e.target);
+    setLocalNodes(nds => nds.map(n =>
+      affected.includes(n.id) ? { ...n, data: { ...n.data, input: output, source: nodeId } } : n
+    ));
+    callbacksRef.current.outputCallback(nodeId, output);
+  }, []);
+
+  // Sync local nodes and the edge ref whenever the replay cursor moves to a new step.
+  useEffect(() => {
+    replayEdgesRef.current = currentGraph.edges;
+    const cbs: ReplayCallbacks = { ...callbacksRef.current, outputCallback: replayOutputCallback };
+    setLocalNodes(currentGraph.nodes.map(n => toRFNode(n, cbs)));
+  }, [currentGraph, replayOutputCallback]);
 
   const rfEdges = useMemo(
     () => currentGraph.edges.map(toRFEdge),
@@ -225,16 +244,6 @@ export const ReplayCanvas: React.FC<ReplayCanvasProps> = ({
         .replay-transparent-flow .react-flow__pane,
         .replay-transparent-flow .react-flow__viewport {
           background: transparent !important;
-        }
-
-        .replay-transparent-flow .react-flow__node {
-          pointer-events: none !important;
-          user-select: none !important;
-        }
-
-        .replay-transparent-flow .react-flow__node * {
-          pointer-events: none !important;
-          cursor: default !important;
         }
 
         .replay-transparent-flow .react-flow__pane,
@@ -304,7 +313,7 @@ export const ReplayCanvas: React.FC<ReplayCanvasProps> = ({
               whiteSpace: 'nowrap',
             }}
           >
-            Preview only
+            Interactive preview — nodes are runnable
           </span>
 
           {loaded && (
@@ -404,11 +413,12 @@ export const ReplayCanvas: React.FC<ReplayCanvasProps> = ({
 
           <ReactFlow
             nodeTypes={REPLAY_NODE_TYPES}
-            nodes={rfNodes}
+            edgeTypes={REPLAY_EDGE_TYPES}
+            nodes={localNodes}
             edges={rfEdges}
             nodesDraggable={false}
             nodesConnectable={false}
-            elementsSelectable={false}
+            elementsSelectable={true}
             panOnDrag={true}
             zoomOnScroll={true}
             zoomOnPinch={true}
