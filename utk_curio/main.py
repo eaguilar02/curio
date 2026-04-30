@@ -358,9 +358,9 @@ def ensure_utk_installed():
         tarball_path = os.path.join(os.path.dirname(__file__), "sandbox", "utk-0.8.9.tar.gz")
 
         result = subprocess.run([sys.executable, "-m", "pip", "install", tarball_path], capture_output=True, text=True)
-        log_info(result.stdout.strip(), verbose_level=2)
+        log_info(result.stdout.strip(), "white", verbose_level=2)
         if result.returncode == 0:
-            log_info("Installed utk successfully.", verbose_level=1)
+            log_info("Installed utk successfully.", "green", verbose_level=1)
         else:
             log_error(f"Failed to install utk:\n{result.stderr.strip()}")
 

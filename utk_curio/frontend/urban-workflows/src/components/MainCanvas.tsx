@@ -19,8 +19,6 @@ import BiDirectionalEdge from "./edges/BiDirectionalEdge";
 import { RightClickMenu } from "./styles";
 import { useRightClickMenu } from "../hook/useRightClickMenu";
 import { useCode } from "../hook/useCode";
-import { useProvenanceContext } from "../providers/ProvenanceProvider";
-import { buttonStyle } from "./styles";
 import { ToolsMenu, UpMenu } from "components/menus";
 import UniDirectionalEdge from "./edges/UniDirectionalEdge";
 import "./MainCanvas.css";
@@ -47,7 +45,14 @@ export function MainCanvas() {
         isValidConnection,
         onEdgesDelete,
         onNodesDelete,
-        restoreGraph
+        restoreGraph,
+        setDashBoardMode,
+        updatePositionWorkflow,
+        updatePositionDashboard,
+        workflowNameRef,
+        workflowGoal,
+        applyNewPropagation,
+        dashboardPins,
     } = useFlowContext();
 
     const [isDragging, setIsDragging] = useState(false);
@@ -62,9 +67,10 @@ export function MainCanvas() {
                 setIsDragging(true);
             }
         };
-        
+
         const handleMouseMove = (e: any) => {
             if (!isDragging || !startPos) return;
+
             const currentPos = { x: e.clientX, y: e.clientY };
             setBoundingBox({
                 start_x: startPos.x,
@@ -73,7 +79,7 @@ export function MainCanvas() {
                 end_y: startPos.y,
             });
         };
-        
+
         const handleMouseUp = () => {
             setIsDragging(false);
         };
@@ -95,71 +101,110 @@ export function MainCanvas() {
 
     const nodeTypes = useMemo(() => {
         const types: Record<string, any> = {};
+
         for (const desc of getAllNodeTypes()) {
             if (desc.adapter) {
                 types[desc.id] = UniversalBox;
             }
         }
+
         return types;
     }, []);
 
-    let objectEdgeTypes: any = {};
-    objectEdgeTypes[EdgeType.BIDIRECTIONAL_EDGE] = BiDirectionalEdge;
-    objectEdgeTypes[EdgeType.UNIDIRECTIONAL_EDGE] = UniDirectionalEdge;
-
-    const edgeTypes = useMemo(() => objectEdgeTypes, []);
+    const edgeTypes = useMemo(() => {
+        const types: Record<string, any> = {};
+        types[EdgeType.BIDIRECTIONAL_EDGE] = BiDirectionalEdge;
+        types[EdgeType.UNIDIRECTIONAL_EDGE] = UniDirectionalEdge;
+        return types;
+    }, []);
 
     const reactFlow = useReactFlow();
-    const {getZoom, getViewport, setViewport, setCenter, screenToFlowPosition} = useReactFlow();
-
-    const {
-        setDashBoardMode,
-        updatePositionWorkflow,
-        updatePositionDashboard,
-        workflowNameRef,
-        workflowGoal,
-        applyNewPropagation,
-    } = useFlowContext();
+    const { screenToFlowPosition } = useReactFlow();
 
     const handleReplayRestore = useCallback((replayNodes: any[], replayEdges: any[]) => {
-        const cleanNodes = replayNodes.map(({ _changed, _dimmed, ...n }: any) => ({
-            ...n,
-            deletable: true,
-            data: {
-                ...n.data,
-                _executing: undefined,
-                _execSuccess: undefined,
-                _execError: undefined,
-                _outputPath: undefined,
-                pythonInterpreter,
-                outputCallback,
-                interactionsCallback,
-                propagationCallback: applyNewPropagation,
-            },
-        }));
-        const cleanEdges = replayEdges.map(({ _changed, ...e }: any) => ({
-            ...e,
-        }));
+        const cleanNodes = replayNodes.map((node: any) => {
+            const {
+                _changed,
+                _dimmed,
+                selected,
+                dragging,
+                style,
+                ...restNode
+            } = node;
+
+            return {
+                ...restNode,
+                selected: false,
+                dragging: false,
+                draggable: true,
+                selectable: true,
+                connectable: true,
+                deletable: true,
+                data: {
+                    ...(restNode.data || {}),
+
+                    _changed: undefined,
+                    _dimmed: undefined,
+                    _executing: undefined,
+                    _execSuccess: undefined,
+                    _execError: undefined,
+                    _outputPath: undefined,
+                    replayMode: undefined,
+                    replayChanged: undefined,
+
+                    pythonInterpreter,
+                    outputCallback,
+                    interactionsCallback,
+                    propagationCallback: applyNewPropagation,
+                },
+            };
+        });
+
+        const cleanEdges = replayEdges.map((edge: any) => {
+            const {
+                _changed,
+                selected,
+                animated,
+                style,
+                markerEnd,
+                ...restEdge
+            } = edge;
+
+            return {
+                ...restEdge,
+                selected: false,
+                animated: false,
+                deletable: true,
+            };
+        });
+
         restoreGraph(cleanNodes, cleanEdges);
         setShowReplay(false);
-    }, [restoreGraph]);
+    }, [
+        restoreGraph,
+        outputCallback,
+        interactionsCallback,
+        applyNewPropagation,
+    ]);
+
+    const replayCallbacks = useMemo(() => ({
+        outputCallback,
+        interactionsCallback,
+        propagationCallback: applyNewPropagation,
+        pythonInterpreter,
+    }), [outputCallback, interactionsCallback, applyNewPropagation]);
 
     const [selectedEdgeId, setSelectedEdgeId] = useState<string>("");
-
-    const [isComponentsSelected, setIsComponentsSelected] = useState<boolean>(false); 
-
+    const [isComponentsSelected, setIsComponentsSelected] = useState<boolean>(false);
     const [floatingBoxes, setFloatingBoxes] = useState<any>({});
-
     const [selectedComponents, setSelectedComponents] = useState<any>({});
-
     const [dashboardOn, setDashboardOn] = useState<boolean>(false);
-    const { dashboardPins } = useFlowContext();
 
     const captureScreenshot = async (): Promise<string | null> => {
         const screenshotTarget = document.getElementsByClassName("react-flow__renderer")[0] as HTMLElement;
 
         if (!screenshotTarget) return null;
-    
+
         return new Promise((resolve) => {
             html2canvas(screenshotTarget).then((canvas) => {
                 canvas.toBlob((blob) => {
@@ -172,63 +217,75 @@ export function MainCanvas() {
                 });
             });
         });
-    }
+    };
 
     const generateExplanation = async (_: React.MouseEvent<HTMLButtonElement>) => {
-        let image_url = await captureScreenshot();
+        const image_url = await captureScreenshot();
 
-        let trill_spec = TrillGenerator.generateTrill(selectedComponents.nodes, selectedComponents.edges, workflowNameRef.current, workflowGoal);
+        const trill_spec = TrillGenerator.generateTrill(
+            selectedComponents.nodes,
+            selectedComponents.edges,
+            workflowNameRef.current,
+            workflowGoal
+        );
 
-        let text = JSON.stringify(trill_spec)
+        const text = JSON.stringify(trill_spec);
 
-        openAIRequest("default_preamble", "explanation_prompt", text).then((response: any) => {
-            console.log("Response:", response);
+        openAIRequest("default_preamble", "explanation_prompt", text)
+            .then((response: any) => {
+                console.log("Response:", response);
 
-            setFloatingBoxes((prevFloatingBoxes: any) => {
-                let uniqueId = crypto.randomUUID()+"";
-                
-                return {
-                    ...prevFloatingBoxes,
-                    [uniqueId]: {
-                        title: "Explanation from "+workflowNameRef.current,
-                        imageUrl: image_url,
-                        markdownText: response.result
-                    }
-                }
+                setFloatingBoxes((prevFloatingBoxes: any) => {
+                    const uniqueId = crypto.randomUUID() + "";
+
+                    return {
+                        ...prevFloatingBoxes,
+                        [uniqueId]: {
+                            title: "Explanation from " + workflowNameRef.current,
+                            imageUrl: image_url,
+                            markdownText: response.result,
+                        },
+                    };
+                });
+            })
+            .catch((error: any) => {
+                console.error("Error:", error);
             });
-        })
-        .catch((error: any) => {
-            console.error("Error:", error);
-        });
-    }
+    };
 
     const generateDebug = async (_: React.MouseEvent<HTMLButtonElement>) => {
-        let image_url = await captureScreenshot();
+        const image_url = await captureScreenshot();
 
-        let trill_spec = TrillGenerator.generateTrill(selectedComponents.nodes, selectedComponents.edges, workflowNameRef.current, workflowGoal);
+        const trill_spec = TrillGenerator.generateTrill(
+            selectedComponents.nodes,
+            selectedComponents.edges,
+            workflowNameRef.current,
+            workflowGoal
+        );
 
-        let text = JSON.stringify(trill_spec) + "\n\n" + ""
+        const text = JSON.stringify(trill_spec) + "\n\n" + "";
 
-        openAIRequest("default_preamble", "debug_prompt", text).then((response: any) => {
-            console.log("Response:", response);
+        openAIRequest("default_preamble", "debug_prompt", text)
+            .then((response: any) => {
+                console.log("Response:", response);
 
-            setFloatingBoxes((prevFloatingBoxes: any) => {
-                let uniqueId = crypto.randomUUID()+"";
-                
-                return {
-                    ...prevFloatingBoxes,
-                    [uniqueId]: {
-                        title: "Debugging "+workflowNameRef.current,
-                        imageUrl: image_url,
-                        markdownText: response.result
-                    }
-                }
+                setFloatingBoxes((prevFloatingBoxes: any) => {
+                    const uniqueId = crypto.randomUUID() + "";
+
+                    return {
+                        ...prevFloatingBoxes,
+                        [uniqueId]: {
+                            title: "Debugging " + workflowNameRef.current,
+                            imageUrl: image_url,
+                            markdownText: response.result,
+                        },
+                    };
+                });
+            })
+            .catch((error: any) => {
+                console.error("Error:", error);
             });
-        })
-        .catch((error: any) => {
-            console.error("Error:", error);
-        });
-    }
+    };
 
     const deleteFloatingBox = (id: string) => {
         setFloatingBoxes((prevFloatingBoxes: any) => {
@@ -236,7 +293,7 @@ export function MainCanvas() {
             delete newFloatingBoxes[id];
             return newFloatingBoxes;
         });
-    }
+    };
 
     const handleDashboardToggle = (value: boolean) => {
         setDashboardOn(value);
@@ -252,328 +309,312 @@ export function MainCanvas() {
     const closeFileMenu = () => setFileMenuOpen(false);
 
     const loadingAnimation = () => {
-        return <div id="plug-loader" role="status" aria-live="polite" aria-busy="true">
+        return (
+            <div id="plug-loader" role="status" aria-live="polite" aria-busy="true">
                 <style>{`
                     #plug-loader {
-                    position: fixed;
-                    inset: 0;
-                    background: #000;             
-                    display: grid;                 
-                    place-items: center;      
-                    z-index: 9999;               
+                        position: fixed;
+                        inset: 0;
+                        background: #000;
+                        display: grid;
+                        place-items: center;
+                        z-index: 9999;
                     }
+
                     #plug-loader .spinner {
-                    width: 64px;
-                    height: 64px;
-                    border-radius: 50%;
-                    border: 6px solid rgba(255,255,255,0.15);
-                    border-top-color: #fff;
-                    animation: plug-rotate 0.9s linear infinite;
+                        width: 64px;
+                        height: 64px;
+                        border-radius: 50%;
+                        border: 6px solid rgba(255,255,255,0.15);
+                        border-top-color: #fff;
+                        animation: plug-rotate 0.9s linear infinite;
                     }
+
                     @keyframes plug-rotate {
-                    to { transform: rotate(360deg); }
+                        to { transform: rotate(360deg); }
                     }
+
                     #plug-loader .sr-only {
-                    position: absolute;
-                    width: 1px; height: 1px;
-                    padding: 0; margin: -1px;
-                    overflow: hidden; clip: rect(0,0,1px,1px);
-                    white-space: nowrap; border: 0;
+                        position: absolute;
+                        width: 1px;
+                        height: 1px;
+                        padding: 0;
+                        margin: -1px;
+                        overflow: hidden;
+                        clip: rect(0,0,1px,1px);
+                        white-space: nowrap;
+                        border: 0;
                     }
                 `}</style>
                 <div className="spinner" />
                 <span className="sr-only">Loading…</span>
             </div>
-    }
+        );
+    };
 
     return (
         <>
-        {showReplay && (
-            <div style={{
-                position: "fixed",
-                top:      "65px",
-                left:     0,
-                right:    0,
-                bottom:   0,
-                zIndex:   1002,
-                background: "rgba(0, 0, 0, 0.51)",
-                pointerEvents: "all",
-            }} />
-        )}
-        {showReplay && (
-            <div style={{
-                position: "fixed",
-                top:      "65px",
-                left:     0,
-                right:    0,
-                bottom:   0,
-                zIndex:   1003,
-                background: "none",
-            }}>
-                <button
-                    onClick={() => setShowReplay(false)}
-                    style={{
-                        position:     "fixed",
-                        top:          60,
-                        right:        16,
-                        zIndex:       9999,
-                        background:   "#dc2626",
-                        color:        "#fff",
-                        border:       "none",
-                        borderRadius: "6px",
-                        padding:      "5px 16px",
-                        cursor:       "pointer",
-                        fontWeight:   700,
-                        fontSize:     "13px",
-                    }}
+            {!loading ? (
+                <div
+                    style={{ width: "100vw", height: "100vh" }}
+                    onContextMenu={onContextMenu}
+                    onClick={closeFileMenu}
                 >
-                    ✕ Close Replay
-                </button>
-                <ReplayPage onRestore={handleReplayRestore} />
-            </div>
-        )}
+                    {Object.keys(floatingBoxes).map((key) => (
+                        <FloatingBox
+                            key={key}
+                            title={floatingBoxes[key].title}
+                            imageUrl={floatingBoxes[key].imageUrl}
+                            markdownText={floatingBoxes[key].markdownText}
+                            onClose={() => deleteFloatingBox(key)}
+                        />
+                    ))}
 
-        {!loading ? <div
-            style={{ width: "100vw", height: "100vh" }}
-            onContextMenu={onContextMenu}
-            onClick={closeFileMenu}
-        >
-            {Object.keys(floatingBoxes).map((key, index) => (
-                <FloatingBox
-                    key={key}
-                    title={floatingBoxes[key].title}
-                    imageUrl={floatingBoxes[key].imageUrl}
-                    markdownText={floatingBoxes[key].markdownText}
-                    onClose={() => {deleteFloatingBox(key)}}
-                />
-            ))}
-            <ReactFlow
-                nodes={filteredNodes}
-                edges={edges}
-                onDragOver={(event) => {
-                    event.preventDefault();
-                    event.dataTransfer.dropEffect = "move";
-                }}
-                onDrop={(event) => {
-                    event.preventDefault();
-            
-                    const type = event.dataTransfer.getData("application/reactflow") as BoxType;
-                    if (!type) return;
-            
-                    const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
-            
-                    createCodeNode(type, {position})
-                }}
-                onNodesChange={(changes: NodeChange[]) => {
+                    <ReactFlow
+                        nodes={filteredNodes}
+                        edges={edges}
+                        onDragOver={(event) => {
+                            event.preventDefault();
+                            event.dataTransfer.dropEffect = "move";
+                        }}
+                        onDrop={(event) => {
+                            event.preventDefault();
 
-                    let allowedChanges: NodeChange[] = [];
+                            const type = event.dataTransfer.getData("application/reactflow") as BoxType;
+                            if (!type) return;
 
-                    let currentEdges = reactFlow.getEdges();
+                            const position = screenToFlowPosition({
+                                x: event.clientX,
+                                y: event.clientY,
+                            });
 
-                    for (const change of changes) {
-                        let allowed = true;
+                            createCodeNode(type, { position });
+                        }}
+                        onNodesChange={(changes: NodeChange[]) => {
+                            const allowedChanges: NodeChange[] = [];
+                            const currentEdges = reactFlow.getEdges();
 
-                        if (change.type == "remove") {
-                            for (const edge of currentEdges) {
+                            for (const change of changes) {
+                                let allowed = true;
+
+                                if (change.type === "remove") {
+                                    for (const edge of currentEdges) {
+                                        if (
+                                            edge.source === change.id ||
+                                            edge.target === change.id
+                                        ) {
+                                            alert(
+                                                "Connected boxes cannot be removed. Remove the edges first by selecting it and pressing backspace."
+                                            );
+                                            allowed = false;
+                                            break;
+                                        }
+                                    }
+                                }
+
                                 if (
-                                    edge.source == change.id ||
-                                    edge.target == change.id
+                                    change.type === "position" &&
+                                    change.position !== undefined &&
+                                    change.position.x !== undefined
                                 ) {
-                                    alert(
-                                        "Connected boxes cannot be removed. Remove the edges first by selecting it and pressing backspace."
-                                    );
-                                    allowed = false;
-                                    break;
+                                    if (dashboardOn) {
+                                        updatePositionDashboard(change.id, change);
+                                    } else {
+                                        updatePositionWorkflow(change.id, change);
+                                    }
+                                }
+
+                                if (allowed) allowedChanges.push(change);
+                            }
+
+                            onNodesDelete(allowedChanges);
+                            return onNodesChange(allowedChanges);
+                        }}
+                        onEdgesChange={(changes: EdgeChange[]) => {
+                            let selected = "";
+                            const allowedChanges = [];
+
+                            for (const change of changes) {
+                                if (change.type === "select" && change.selected === true) {
+                                    setSelectedEdgeId(change.id);
+                                    selected = change.id;
+                                } else if (change.type === "select") {
+                                    setSelectedEdgeId("");
+                                    selected = "";
                                 }
                             }
-                        }
 
-                        if (
-                            change.type == "position" &&
-                            change.position != undefined &&
-                            change.position.x != undefined
-                        ) {
-                            if (dashboardOn)
-                                updatePositionDashboard(change.id, change);
-                            else updatePositionWorkflow(change.id, change);
-                        }
+                            for (const change of changes) {
+                                if (
+                                    change.type === "remove" &&
+                                    (selected === change.id || selectedEdgeId === change.id)
+                                ) {
+                                    allowedChanges.push(change);
+                                } else if (change.type !== "remove") {
+                                    allowedChanges.push(change);
+                                }
+                            }
 
-                        if (allowed) allowedChanges.push(change);
-                    }
-
-                    onNodesDelete(allowedChanges);
-                    return onNodesChange(allowedChanges);
-                }}
-                onEdgesChange={(changes: EdgeChange[]) => {
-                    let selected = "";
-                    let allowedChanges = [];
-
-                    for (const change of changes) {
-                        if (
-                            change.type == "select" &&
-                            change.selected == true
-                        ) {
-                            setSelectedEdgeId(change.id);
-                            selected = change.id;
-                        } else if (change.type == "select") {
-                            setSelectedEdgeId("");
-                            selected = "";
-                        }
-                    }
-
-                    for (const change of changes) {
-                        if (
-                            change.type == "remove" &&
-                            (selected == change.id ||
-                                selectedEdgeId == change.id)
-                        ) {
-                            allowedChanges.push(change);
-                        } else if (change.type != "remove") {
-                            allowedChanges.push(change);
-                        }
-                    }
-
-                    return onEdgesChange(allowedChanges);
-                }}
-                onEdgesDelete={(edges: Edge[]) => {
-                    console.log("edges", edges);
-
-                    let allowedEdges: Edge[] = [];
-
-                    for (const edge of edges) {
-                        if (selectedEdgeId == edge.id) {
-                            allowedEdges.push(edge);
-                        }
-                    }
-
-                    return onEdgesDelete(allowedEdges);
-                }}
-                selectionKeyCode="Shift"
-                onSelectionChange={(selection) => {
-                    let all_x = [];
-                    let all_y = [];
-                
-                    setSelectedComponents(selection);
-
-                    for(const node of selection.nodes){
-                        all_x.push(node.position.x);
-                        all_y.push(node.position.y);    
-                    }
-
-                    if(selection.nodes.length + selection.edges.length > 1){
-                        setIsComponentsSelected(true);
-                    }else{
-                        setIsComponentsSelected(false);
-                    }
-                }}
-                onConnect={onConnect}
-                nodeTypes={nodeTypes}
-                edgeTypes={edgeTypes}
-                isValidConnection={isValidConnection}
-                connectionMode={ConnectionMode.Loose}
-                nodesDeletable={true}
-                deleteKeyCode={['Delete', 'Backspace']}
-                minZoom={0.05}
-                fitView
-                attributionPosition="bottom-right"
-            >
-                {AIModeRef.current ? <WorkflowGoal /> : null}
-                <UserMenu />
-                {AIModeRef.current ? <LLMChat /> : null}
-                <UpMenu 
-                    setDashBoardMode={(value) => handleDashboardToggle(value)}
-                    setDashboardOn={handleDashboardToggle}
-                    dashboardOn={dashboardOn}
-                    fileMenuOpen={fileMenuOpen}
-                    setFileMenuOpen={setFileMenuOpen}
-                    setAIMode={setAIMode}
-                    replayOpen={showReplay}
-                />
-                <RightClickMenu
-                    showMenu={showMenu}
-                    menuPosition={menuPosition}
-                    options={[
-                        {
-                            name: "Add comment box",
-                            action: () => createCodeNode("COMMENTS"),
-                        },
-                    ]}
-                />
-                <Background style={{ zIndex: -1 }} />
-                <Controls style={{ bottom: '60px' }} />
-
-                { isComponentsSelected ? (
-                    <button
-                        id={"explainButton"}
-                        style={{
-                            bottom: "50px",
-                            left: "30%",
-                            position: "absolute",
-                            zIndex: 10,
-                            padding: "8px 16px",
-                            backgroundColor: "#007bff",
-                            color: "#fff",
-                            border: "none",
-                            borderRadius: "4px",
-                            cursor: "pointer",
+                            return onEdgesChange(allowedChanges);
                         }}
-                        onClick={generateExplanation}
-                    >
-                        Explain
-                    </button>
-                ) : null}
+                        onEdgesDelete={(deletedEdges: Edge[]) => {
+                            const allowedEdges: Edge[] = [];
 
-                { isComponentsSelected ? (
-                    <button
-                        style={{
-                            bottom: "50px",
-                            left: "40%",
-                            position: "absolute",
-                            zIndex: 10,
-                            padding: "8px 16px",
-                            backgroundColor: "#007bff",
-                            color: "#fff",
-                            border: "none",
-                            borderRadius: "4px",
-                            cursor: "pointer",
+                            for (const edge of deletedEdges) {
+                                if (selectedEdgeId === edge.id) {
+                                    allowedEdges.push(edge);
+                                }
+                            }
+
+                            return onEdgesDelete(allowedEdges);
                         }}
-                        onClick={generateDebug}
-                    >
-                        Debug
-                    </button>
-                ) : null}
-            </ReactFlow>
-            <button
-                onClick={() => setShowReplay(true)}
-                title="Open session replay"
-                style={{
-                    position:     "fixed",
-                    bottom:       "30px",
-                    left:         "15px",
-                    zIndex:       999,
-                    padding:      "6px 14px",
-                    background:   "#1e3a5f",
-                    color:        "#fff",
-                    border:       "none",
-                    borderRadius: "6px",
-                    cursor:       "pointer",
-                    fontSize:     "16px",
-                    fontWeight:   700,
-                    display:      "flex",
-                    alignItems:   "center",
-                    gap:          "5px",
-                    boxShadow:    "0 1px 4px rgba(0, 0, 0, 0.48)",
-                    opacity:      showReplay ? 0.4 : 1,
-                    pointerEvents: showReplay ? "none" : "auto",
-                }}
-            >
-                🎞  Replay
-            </button>
-            <ToolsMenu replayOpen={showReplay} />
-            <input hidden type="file" name="file" id="file" />
+                        selectionKeyCode="Shift"
+                        onSelectionChange={(selection) => {
+                            setSelectedComponents(selection);
 
-        </div> : loadingAnimation() }     
+                            if (selection.nodes.length + selection.edges.length > 1) {
+                                setIsComponentsSelected(true);
+                            } else {
+                                setIsComponentsSelected(false);
+                            }
+                        }}
+                        onConnect={onConnect}
+                        nodeTypes={nodeTypes}
+                        edgeTypes={edgeTypes}
+                        isValidConnection={isValidConnection}
+                        connectionMode={ConnectionMode.Loose}
+                        nodesDeletable={true}
+                        deleteKeyCode={["Delete", "Backspace"]}
+                        minZoom={0.05}
+                        fitView
+                        attributionPosition="bottom-right"
+                    >
+                        {AIModeRef.current ? <WorkflowGoal /> : null}
+                        <UserMenu />
+                        {AIModeRef.current ? <LLMChat /> : null}
+
+                        <UpMenu
+                            setDashBoardMode={(value) => handleDashboardToggle(value)}
+                            setDashboardOn={handleDashboardToggle}
+                            dashboardOn={dashboardOn}
+                            fileMenuOpen={fileMenuOpen}
+                            setFileMenuOpen={setFileMenuOpen}
+                            setAIMode={setAIMode}
+                            replayOpen={showReplay}
+                        />
+
+                        <RightClickMenu
+                            showMenu={showMenu}
+                            menuPosition={menuPosition}
+                            options={[
+                                {
+                                    name: "Add comment box",
+                                    action: () => createCodeNode("COMMENTS"),
+                                },
+                            ]}
+                        />
+
+                        <Background style={{ zIndex: -1 }} />
+                        <Controls style={{ bottom: "60px" }} />
+
+                        {isComponentsSelected && (
+                            <button
+                                id="explainButton"
+                                style={{
+                                    bottom: "50px",
+                                    left: "30%",
+                                    position: "absolute",
+                                    zIndex: 10,
+                                    padding: "8px 16px",
+                                    backgroundColor: "#007bff",
+                                    color: "#fff",
+                                    border: "none",
+                                    borderRadius: "4px",
+                                    cursor: "pointer",
+                                }}
+                                onClick={generateExplanation}
+                            >
+                                Explain
+                            </button>
+                        )}
+
+                        {isComponentsSelected && (
+                            <button
+                                style={{
+                                    bottom: "50px",
+                                    left: "40%",
+                                    position: "absolute",
+                                    zIndex: 10,
+                                    padding: "8px 16px",
+                                    backgroundColor: "#007bff",
+                                    color: "#fff",
+                                    border: "none",
+                                    borderRadius: "4px",
+                                    cursor: "pointer",
+                                }}
+                                onClick={generateDebug}
+                            >
+                                Debug
+                            </button>
+                        )}
+                    </ReactFlow>
+
+                    {showReplay && (
+                        <div
+                            style={{
+                                position: "fixed",
+                                top: "65px",
+                                left: 0,
+                                right: 0,
+                                bottom: 0,
+                                zIndex: 1002,
+                                background: "rgba(0, 0, 0, 0.42)",
+                                pointerEvents: "all",
+                            }}
+                        >
+                            <ReplayPage
+                                onRestore={handleReplayRestore}
+                                onClose={() => setShowReplay(false)}
+                                replayCallbacks={replayCallbacks}
+                            />
+                        </div>
+                    )}
+
+                    {!showReplay && (
+                        <button
+                            onClick={() => setShowReplay(true)}
+                            title="Open replay"
+                            style={{
+                                position: "fixed",
+                                left: "16px",
+                                bottom: "18px",
+                                zIndex: 2100,
+                                padding: "10px 18px",
+                                background: "#1E1F23",
+                                color: "#ffffff",
+                                border: "none",
+                                borderRadius: "8px",
+                                cursor: "pointer",
+                                fontSize: "15px",
+                                fontWeight: 800,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                boxShadow: "0 4px 12px rgba(0,0,0,0.35)",
+                                transition: "all 0.15s ease",
+                                minHeight: "40px",
+                            }}
+                        >
+                            Replay
+                        </button>
+                    )}
+
+                    <ToolsMenu replayOpen={showReplay} />
+                    <input hidden type="file" name="file" id="file" />
+                </div>
+            ) : (
+                loadingAnimation()
+            )}
         </>
-        
     );
 }
